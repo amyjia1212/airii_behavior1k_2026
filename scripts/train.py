@@ -78,17 +78,63 @@ def init_wandb(config: _config.TrainConfig, *, resuming: bool, log_code: bool = 
         raise FileNotFoundError(f"Checkpoint directory {ckpt_dir} does not exist.")
     if resuming:
         run_id = (ckpt_dir / "wandb_id.txt").read_text().strip()
-        wandb.init(id=run_id, resume="must", project=config.project_name)
+        wandb.init(id=run_id, resume="must", project=config.project_name, entity=config.wandb_entity)
     else:
         wandb.init(
-            name=config.exp_name,
+            name=config.wandb_run_name or config.exp_name,
             config=dataclasses.asdict(config),
             project=config.project_name,
+            entity=config.wandb_entity,
         )
         (ckpt_dir / "wandb_id.txt").write_text(wandb.run.id)
 
     if log_code:
         wandb.run.log_code(epath.Path(__file__).parent.parent)
+
+
+class HFUploader:
+    """Uploads `step_XXXXXX/{params,assets}` of saved checkpoints to a Hugging Face model repo.
+
+    Our training pods were ephemeral, so every `hf_push_interval` steps (and at the final step) the latest
+    checkpoint's params + assets are copied to a staging dir and uploaded. If an upload fails, the staged copy
+    is kept on disk so it can be pushed manually later.
+    """
+
+    def __init__(self, config: _config.TrainConfig):
+        self.repo_id = config.hf_repo_id
+        self.interval = config.hf_push_interval
+        self.checkpoint_dir = config.checkpoint_dir
+        self.staging_dir = config.checkpoint_dir.parent / f"{config.exp_name}_hf_staging"
+        if self.repo_id:
+            from huggingface_hub import HfApi
+
+            self.api = HfApi()
+            self.api.create_repo(self.repo_id, private=config.hf_private, exist_ok=True)
+            logging.info(f"HF uploads enabled -> {self.repo_id} every {self.interval} steps")
+
+    def should_upload(self, step: int, last_step: int) -> bool:
+        return bool(self.repo_id) and (step % self.interval == 0 or step == last_step) and step > 0
+
+    def upload(self, checkpoint_manager, step: int):
+        import shutil
+
+        checkpoint_manager.wait_until_finished()
+        src = self.checkpoint_dir / str(step)
+        name = f"step_{step:06d}"
+        dst = self.staging_dir / name
+        try:
+            if dst.exists():
+                shutil.rmtree(dst)
+            dst.mkdir(parents=True)
+            for sub in ("params", "assets"):
+                if (src / sub).exists():
+                    shutil.copytree(src / sub, dst / sub)
+            self.api.upload_folder(repo_id=self.repo_id, folder_path=str(dst), path_in_repo=name,
+                                   commit_message=f"Add {name}")
+            shutil.rmtree(dst, ignore_errors=True)
+            logging.info(f"HF upload for step {step} done: https://huggingface.co/{self.repo_id}/tree/main/{name}")
+        except Exception as e:  # never kill training because of an upload problem
+            logging.error(f"HF upload for step {step} FAILED (staged copy kept at {dst}): {e!r}")
 
 
 def _load_weights_and_validate(loader: _weight_loaders.WeightLoader, params_shape: at.Params) -> at.Params:
@@ -363,6 +409,7 @@ def main(config: _config.TrainConfig):
         keep_period=config.keep_period,
         overwrite=config.overwrite,
         resume=config.resume,
+        max_to_keep=config.max_to_keep,
     )
     init_wandb(config, resuming=resuming, enabled=config.wandb_enabled)
 
@@ -413,6 +460,8 @@ def main(config: _config.TrainConfig):
         donate_argnums=(1,),
     )
 
+    hf_uploader = HFUploader(config)
+
     start_step = int(train_state.step)
     pbar = tqdm.tqdm(
         range(start_step, config.num_train_steps),
@@ -441,6 +490,15 @@ def main(config: _config.TrainConfig):
 
         if (step % config.save_interval == 0 and step > start_step) or step == config.num_train_steps - 1:
             _checkpoints.save_state(checkpoint_manager, train_state, data_loader, step)
+            if hf_uploader.should_upload(step, config.num_train_steps - 1):
+                hf_uploader.upload(checkpoint_manager, step)
+            if config.restart_data_workers_after_checkpoint and step < config.num_train_steps - 1:
+                # Long runs with video decoding in 8 workers slowly grew host memory; recreating the worker
+                # pool after each checkpoint kept it flat.
+                del data_iter
+                data_iter = iter(data_loader)
+                batch = next(data_iter)
+                logging.info(f"Restarted data workers after checkpoint at step {step}")
 
     logging.info("Waiting for checkpoint manager to finish")
     checkpoint_manager.wait_until_finished()

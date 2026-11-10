@@ -1,0 +1,13 @@
+{
+  "_comment": "2026 PI_BEHAVIOR checkpoints from this repo (25 of the 100 tasks; the rest of our team's submission used other models, see README). Paths assume `uv run scripts/download_checkpoints.py` with the default --models-dir ~/models.",
+  "checkpoints": {
+    "t50-70-72-85": {"path": "~/models/b1k-2026-t50-70-72-85/step_049999", "tasks": [50, 70, 72, 85]},
+    "t52": {"path": "~/models/b1k-2026-t52/step_008000", "tasks": [52]},
+    "t52-53-73-66-86": {"path": "~/models/b1k-2026-t52-53-73-66-86/step_049999", "tasks": [53, 66, 73, 86]},
+    "t65-71-74-75": {"path": "~/models/b1k-2026-t65-71-74-75/step_049999", "tasks": [65, 71, 74, 75]},
+    "t79-81-84-88": {"path": "~/models/b1k-2026-t79-81-84-88/step_049999", "tasks": [79, 84, 88]},
+    "t81-ft10k": {"path": "~/models/b1k-2026-t81-ft10k/step_009999", "tasks": [81]},
+    "t90-91-93-96-97": {"path": "~/models/b1k-2026-t90-91-93-96-97/step_099999", "tasks": [90, 91, 93, 96, 97]},
+    "t94-95-98": {"path": "~/models/b1k-2026-t94-95-98/step_049999", "tasks": [94, 95, 98]}
+  }
+}

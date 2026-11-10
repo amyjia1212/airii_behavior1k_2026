@@ -32,10 +32,21 @@ TASK_NUM_STAGES = (
     14, 15, 9, 15, 15, 15, 15, 15, 15, 15,  # Tasks 20-29
     11, 10, 10, 13, 5, 5, 14, 6, 8, 10,  # Tasks 30-39
     5, 15, 8, 15, 12, 11, 9, 14, 15, 15,  # Tasks 40-49
+    # --- 2026 challenge: tasks 50-99 ---
+    # Tasks 0-49 keep the 2025 values above so 2025 checkpoints stay compatible.
+    # Tasks 50-99 use floor(avg_episode_length / 900) clamped to [5, 15], computed from
+    # behavior-1k/2026-challenge-demos meta/episodes (see scripts/compute_task_num_stages.py).
+    # Total = 596 + 491 = 1087, matching the task_stage_embeddings shape in our 2026 checkpoints.
+    14, 8, 11, 14, 13, 11, 5, 5, 15, 7,  # Tasks 50-59
+    5, 12, 7, 5, 15, 13, 11, 7, 14, 5,  # Tasks 60-69
+    9, 15, 10, 15, 12, 13, 10, 5, 5, 12,  # Tasks 70-79
+    10, 10, 9, 8, 14, 13, 11, 11, 14, 5,  # Tasks 80-89
+    5, 11, 5, 5, 15, 15, 5, 15, 15, 9,  # Tasks 90-99
 )
 
 MAX_NUM_STAGES = 15  # Maximum stages per task
-TOTAL_TASK_STAGE_EMBEDDINGS = sum(TASK_NUM_STAGES)  # 596 total embeddings
+TOTAL_TASK_STAGE_EMBEDDINGS = sum(TASK_NUM_STAGES)  # 1087 total embeddings (596 for the 2025 tasks)
+NUM_TASKS_2026 = len(TASK_NUM_STAGES)  # 100
 
 # Cumulative offsets for indexing into task_stage_embeddings (as tuple)
 TASK_STAGE_OFFSETS = tuple([0] + [sum(TASK_NUM_STAGES[:i+1]) for i in range(len(TASK_NUM_STAGES) - 1)])
@@ -52,8 +63,10 @@ class PiBehaviorConfig(_model.BaseModelConfig):
     action_horizon: int = 30
     max_token_len: int = 200  # Only used for compatibility, not for actual tokenization
     
-    # Number of tasks in the behavior dataset
+    # Number of tasks in the behavior dataset (50 for the 2025 challenge, 100 for 2026)
     num_tasks: int = 50
+    # Input image resolution (H, W). 2026 configs use 280x280 (SigLIP 20x20 patches instead of 16x16).
+    image_resolution: tuple[int, int] = (224, 224)
     # Task embedding dimension - will match the paligemma width
     task_embedding_dim: int = None  # type: ignore
     # Maximum number of subtask states across all tasks
@@ -142,7 +155,7 @@ class PiBehaviorConfig(_model.BaseModelConfig):
 
     @override
     def inputs_spec(self, *, batch_size: int = 1) -> tuple["Observation", _model.Actions]:
-        image_spec = jax.ShapeDtypeStruct([batch_size, *_model.IMAGE_RESOLUTION, 3], jnp.float32)
+        image_spec = jax.ShapeDtypeStruct([batch_size, *self.image_resolution, 3], jnp.float32)
         image_mask_spec = jax.ShapeDtypeStruct([batch_size], jnp.bool_)
 
         with at.disable_typechecking():

@@ -92,6 +92,10 @@ class DataConfig:
     # Episodes index to use for training 
     episodes_index: List[int] | None = None
 
+    # 2026 challenge: task ids (0-99) to train on. If set, the LeRobot v3 loader
+    # (b1k.training.lerobot_v3) is used instead of OmniGibson's 2025 BehaviorLeRobotDataset.
+    task_indices: List[int] | None = None
+
 
 class GroupFactory(Protocol):
     def __call__(self, model_config: _model.BaseModelConfig) -> _transforms.Group:
@@ -107,7 +111,7 @@ class ModelTransformFactory(GroupFactory):
     def __call__(self, model_config: _model.BaseModelConfig) -> _transforms.Group:
         return _transforms.Group(
             inputs=[
-                _transforms.ResizeImages(224, 224),
+                _transforms.ResizeImages(*getattr(model_config, "image_resolution", (224, 224))),
                 b1k_transforms.ComputeSubtaskStateFromMeta(dataset=None),
                 b1k_transforms.TaskIndexToTaskId(),
                 _transforms.PadStatesAndActions(model_config.action_dim),
@@ -162,13 +166,21 @@ class LeRobotB1KDataConfig(DataConfigFactory):
     # FAST auxiliary tokenization (only for PI_BEHAVIOR with use_fast_auxiliary)
     use_fast_tokenization: bool = False
 
+    # Dataset keys for the (head, left wrist, right wrist) RGB cameras.
+    # 2025 dataset: observation.images.rgb.*; 2026 LeRobot v3 dataset: observation.rgb.*_camera_0
+    camera_keys: Sequence[str] = (
+        "observation.images.rgb.head",
+        "observation.images.rgb.left_wrist",
+        "observation.images.rgb.right_wrist",
+    )
+
     @override
     def create(self, assets_dirs: pathlib.Path, model_config: _model.BaseModelConfig) -> DataConfig:
         # Repack transforms for B1K observations
         repack_mapping = {
-            "observation/egocentric_camera": "observation.images.rgb.head",
-            "observation/wrist_image_left": "observation.images.rgb.left_wrist",
-            "observation/wrist_image_right": "observation.images.rgb.right_wrist",
+            "observation/egocentric_camera": self.camera_keys[0],
+            "observation/wrist_image_left": self.camera_keys[1],
+            "observation/wrist_image_right": self.camera_keys[2],
             "observation/state": "observation.state",
             "actions": "action",
             "task_index": "task_index",  # Always preserve task_index
@@ -307,6 +319,20 @@ class TrainConfig:
     # Number of flow matching samples per training step
     num_flow_samples: int = 1
 
+    # --- 2026 additions ---
+    # Max number of (non keep_period) checkpoints kept on disk.
+    max_to_keep: int = 1
+    # W&B entity (team) and run name. Defaults: personal entity, run name = exp_name.
+    wandb_entity: str | None = None
+    wandb_run_name: str | None = None
+    # If set, every `hf_push_interval` steps the params + assets of the latest checkpoint are uploaded
+    # to this Hugging Face model repo under `step_XXXXXX/` (our pods were ephemeral).
+    hf_repo_id: str | None = None
+    hf_push_interval: int = 2000
+    hf_private: bool = False
+    # Recreate the data loader workers after each checkpoint save (keeps host memory flat on long runs).
+    restart_data_workers_after_checkpoint: bool = False
+
     @property
     def assets_dirs(self) -> pathlib.Path:
         """Get the assets directory for this config."""
@@ -377,6 +403,11 @@ _CONFIGS = [
         keep_period=2000,
     ),
 ]
+
+# 2026 challenge configs (reconstructed from our W&B run configs), see configs_2026.py
+from b1k.training.configs_2026 import make_2026_configs  # noqa: E402
+
+_CONFIGS.extend(make_2026_configs(TrainConfig, LeRobotB1KDataConfig, DataConfig))
 
 if len({config.name for config in _CONFIGS}) != len(_CONFIGS):
     raise ValueError("Config names must be unique.")

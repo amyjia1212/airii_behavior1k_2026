@@ -4,6 +4,7 @@ Was used in the final submission to allow changing checkpoints based on task_id 
 """
 
 import json
+import os
 import logging
 import gc
 from typing import Any, TYPE_CHECKING
@@ -12,6 +13,7 @@ from openpi.policies import policy as _policy
 
 # Import B1K-specific policy_config
 from b1k.policies import policy_config as _policy_config
+from b1k.models.pi_behavior_config import TASK_NUM_STAGES
 
 if TYPE_CHECKING:
     from b1k.training import config as _config
@@ -19,7 +21,8 @@ if TYPE_CHECKING:
 
 class CheckpointSwitcher:
     """Loads different checkpoints per task. Only one checkpoint in memory at a time.
-    All 50 tasks must be mapped in task_checkpoint_mapping.json.
+    2026: tasks 0-99. Tasks missing from the mapping are logged as warnings (a partial mapping is
+    allowed because a sub-team may only cover some tasks); requesting an unmapped task raises.
     """
     
     def __init__(
@@ -56,7 +59,7 @@ class CheckpointSwitcher:
         self._validate_all_tasks_covered()
         
         logging.info(f"Checkpoint switcher initialized with {len(self.checkpoint_paths)} checkpoints")
-        logging.info(f"All 50 tasks explicitly mapped to checkpoints")
+        logging.info(f"{len(self.task_to_checkpoint)} tasks mapped to checkpoints")
     
     def _load_mapping(self):
         """Load and validate the checkpoint→tasks mapping."""
@@ -81,7 +84,7 @@ class CheckpointSwitcher:
             if "tasks" not in checkpoint_info:
                 raise ValueError(f"Checkpoint '{checkpoint_name}' missing 'tasks' field")
             
-            checkpoint_path = checkpoint_info["path"]
+            checkpoint_path = os.path.expanduser(checkpoint_info["path"])
             tasks = checkpoint_info["tasks"]
             
             # Validate tasks are unique
@@ -97,22 +100,22 @@ class CheckpointSwitcher:
             logging.info(f"Checkpoint '{checkpoint_name}' -> {len(tasks)} tasks: {sorted(tasks)}")
     
     def _validate_all_tasks_covered(self):
-        """Validate that all 50 tasks are explicitly mapped to checkpoints."""
-        all_tasks = set(range(50))
+        """Warn about tasks (0-99) that are not mapped to any checkpoint."""
+        all_tasks = set(range(len(TASK_NUM_STAGES)))
         mapped_tasks = set(self.task_to_checkpoint.keys())
         missing_tasks = sorted(all_tasks - mapped_tasks)
-        
+        unknown_tasks = sorted(mapped_tasks - all_tasks)
+
+        if unknown_tasks:
+            raise ValueError(f"Mapping contains invalid task ids: {unknown_tasks}")
         if missing_tasks:
-            raise ValueError(
-                f"All 50 tasks must be explicitly mapped to checkpoints. "
-                f"Missing tasks: {missing_tasks}"
-            )
+            logging.warning(f"{len(missing_tasks)} tasks are not mapped to any checkpoint: {missing_tasks}")
     
     def get_checkpoint_for_task(self, task_id: int) -> str:
         """Get which checkpoint should handle this task.
         
         Args:
-            task_id: Task ID (0-49)
+            task_id: Task ID (0-99)
             
         Returns:
             Checkpoint name
@@ -129,7 +132,7 @@ class CheckpointSwitcher:
         """Get policy for task_id, loading new checkpoint if needed.
         
         Args:
-            task_id: Task ID (0-49)
+            task_id: Task ID (0-99)
             
         Returns:
             Policy for the requested task

@@ -13,6 +13,8 @@ CUDA_VERSION="${CUDA_VERSION:-12.4}"
 OPENPI_REPO="${OPENPI_REPO:-https://github.com/wensi-ai/openpi.git}"
 OPENPI_BRANCH="${OPENPI_BRANCH:-behavior}"
 B1K_REPO="${B1K_REPO:-https://github.com/StanfordVL/BEHAVIOR-1K.git}"
+# 2026 challenge: BEHAVIOR-1K v3.9.3 (we evaluated with v3.9.3-post1; the submodule is pinned to that tag)
+B1K_TAG="${B1K_TAG:-v3.9.3-post1}"
 
 SUDO=""; if [ "${EUID:-$(id -u)}" -ne 0 ]; then SUDO="sudo"; fi
 
@@ -55,7 +57,7 @@ uv sync --extra dev
 if [ ! -d "BEHAVIOR-1K" ]; then
   echo "Initializing BEHAVIOR-1K submodule..."
   git submodule update --init BEHAVIOR-1K 2>/dev/null || \
-    GIT_LFS_SKIP_SMUDGE=1 git clone "$B1K_REPO" "BEHAVIOR-1K"
+    GIT_LFS_SKIP_SMUDGE=1 git clone -b "$B1K_TAG" "$B1K_REPO" "BEHAVIOR-1K"
 fi
 
 # Install BEHAVIOR-1K dependencies (bddl and OmniGibson)
@@ -97,6 +99,12 @@ echo "BEHAVIOR-1K: $(pwd)/BEHAVIOR-1K"
 echo ""
 echo "Use 'uv run' to execute scripts (no need to activate venv):"
 echo ""
+echo "2026 challenge (see README.md):"
+echo "  uv run scripts/download_checkpoints.py"
+echo "  uv run scripts/compute_norm_stats.py --config-name pi_behavior_b1k_2026_c1 --correlation"
+echo "  uv run scripts/train.py pi_behavior_b1k_2026_c1 --overwrite"
+echo ""
+echo "2025 challenge:"
 echo "  uv run scripts/compute_norm_stats.py --config-name pi_behavior_b1k_fast --correlation"
 echo "  uv run scripts/train_fast_tokenizer.py --config-name pi_behavior_b1k_fast --encoded-dims=\"0:6,7:23\" --vocab-size=1024"
 echo "  uv run scripts/train.py pi_behavior_b1k_fast --resume --batch_size=2048"

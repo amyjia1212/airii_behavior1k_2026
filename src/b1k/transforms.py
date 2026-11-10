@@ -136,7 +136,7 @@ class ComputeSubtaskStateFromMeta(DataTransformFn):
         task_index = int(data["task_index"])
         
         # Validate task_index
-        if not (0 <= task_index < 50):
+        if not (0 <= task_index < len(TASK_NUM_STAGES)):
             logging.warning(f"Invalid task_index {task_index}, using stage 0")
             data["subtask_state"] = np.array(0, dtype=np.int32)
             return data

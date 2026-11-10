@@ -11,11 +11,14 @@ from openpi_client.image_tools import resize_with_pad
 from b1k.policies.b1k_policy import extract_state_from_proprio
 from b1k.models.pi_behavior_config import TASK_NUM_STAGES
 from b1k.shared.correction_rules import apply_correction_rules, check_gripper_variation
-from omnigibson.learning.utils.eval_utils import PROPRIOCEPTION_INDICES
+try:  # BEHAVIOR-1K >= v3.9 (2026 challenge)
+    from omnigibson.eval.utils.eval_utils import PROPRIOCEPTION_INDICES
+except ImportError:  # BEHAVIOR-1K 2025 challenge releases
+    from omnigibson.learning.utils.eval_utils import PROPRIOCEPTION_INDICES
 
 logger = logging.getLogger(__name__)
 
-RESIZE_SIZE = 224
+RESIZE_SIZE = 224  # 2025 default; 2026 models use B1KWrapperConfig.image_size=280
 
 
 @dataclasses.dataclass
@@ -29,6 +32,16 @@ class B1KWrapperConfig:
     time_threshold_inpaint: float = 0.3
     num_steps: int = 20
     apply_eval_tricks: bool = True
+    # --- 2026 additions ---
+    # Side length the camera images are resized (with padding) to before inference. Must match the model's
+    # image_resolution (280 for all our 2026 checkpoints).
+    image_size: int = RESIZE_SIZE
+    # Gripper recovery: if a gripper is commanded closed but its fingers have been fully closed (i.e. closed on
+    # nothing) for `gripper_stuck_steps` consecutive env steps, force it open for `gripper_open_hold_steps`
+    # steps so the policy can re-grasp. 0 disables it. Our 2026 evals used 90 / 15 ("gr90").
+    gripper_stuck_steps: int = 0
+    gripper_open_hold_steps: int = 15
+    gripper_closed_threshold: float = -0.9  # normalised finger width (-1 = fully closed, +1 = fully open)
 
 
 class B1KPolicyWrapper():
@@ -67,6 +80,35 @@ class B1KPolicyWrapper():
         self.step_count = 0
         self.prediction_count = 0
         self.next_initial_actions = None
+        self._reset_gripper_recovery()
+
+    # -- 2026: gripper recovery ------------------------------------------------------------------------------
+    _GRIPPERS = (("left", 14), ("right", 22))  # indices in both the 23-dim action and extracted state
+
+    def _reset_gripper_recovery(self):
+        self._gripper_stuck = {side: 0 for side, _ in self._GRIPPERS}
+        self._gripper_hold = {side: 0 for side, _ in self._GRIPPERS}
+
+    def _apply_gripper_recovery(self, action: np.ndarray, state: np.ndarray) -> np.ndarray:
+        if self.config.gripper_stuck_steps <= 0:
+            return action
+        action = action.copy()
+        for side, idx in self._GRIPPERS:
+            if self._gripper_hold[side] > 0:
+                action[idx] = 1.0
+                self._gripper_hold[side] -= 1
+                continue
+            commanded_closed = action[idx] < 0.0
+            fully_closed = state[idx] < self.config.gripper_closed_threshold
+            self._gripper_stuck[side] = self._gripper_stuck[side] + 1 if (commanded_closed and fully_closed) else 0
+            if self._gripper_stuck[side] >= self.config.gripper_stuck_steps:
+                logger.info(f"🔧 Gripper recovery: {side} gripper closed on nothing for "
+                            f"{self._gripper_stuck[side]} steps -> opening for {self.config.gripper_open_hold_steps} steps "
+                            f"(task {self.task_id}, step {self.step_count})")
+                self._gripper_stuck[side] = 0
+                self._gripper_hold[side] = self.config.gripper_open_hold_steps
+                action[idx] = 1.0
+        return action
     
     def reset(self):
         """Reset policy state."""
@@ -78,6 +120,7 @@ class B1KPolicyWrapper():
         self.next_initial_actions = None
         self.current_stage = 0
         self.prediction_history.clear()
+        self._reset_gripper_recovery()
         logger.info(f"Policy reset - Task ID: {self.task_id}, Action horizon: {self.action_horizon}")
     
     def _handle_task_change(self, new_task_id):
@@ -111,9 +154,10 @@ class B1KPolicyWrapper():
         right_original = obs["robot_r1::robot_r1:right_realsense_link:Camera:0::rgb"][..., :3]
         
         # Resize images
-        head_resized = resize_with_pad(head_original, RESIZE_SIZE, RESIZE_SIZE)
-        left_resized = resize_with_pad(left_original, RESIZE_SIZE, RESIZE_SIZE)
-        right_resized = resize_with_pad(right_original, RESIZE_SIZE, RESIZE_SIZE)
+        size = self.config.image_size
+        head_resized = resize_with_pad(head_original, size, size)
+        left_resized = resize_with_pad(left_original, size, size)
+        right_resized = resize_with_pad(right_original, size, size)
         
         return {
             "observation/egocentric_camera": head_resized,
@@ -291,6 +335,7 @@ class B1KPolicyWrapper():
             self.action_index = 0
             
         current_action = self.last_actions[self.action_index]
+        current_action = self._apply_gripper_recovery(np.asarray(current_action), current_state)
         self.action_index += 1
         self.step_count += 1
         

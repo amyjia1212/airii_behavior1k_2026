@@ -46,7 +46,12 @@ class DataLoaderImpl(DataLoader):
             yield Observation.from_dict(batch), batch["actions"]
 
 
-def create_behavior_dataset(data_config: _config.DataConfig, action_horizon: int, seed: int | None = None) -> Dataset:
+def create_behavior_dataset(
+    data_config: _config.DataConfig,
+    action_horizon: int,
+    seed: int | None = None,
+    camera_keys: tuple[str, ...] = (),
+) -> Dataset:
     """Create a BEHAVIOR-1K dataset for training.
     
     Uses OmniGibson's BehaviorLeRobotDataset for efficient loading of BEHAVIOR-1K data.
@@ -59,6 +64,22 @@ def create_behavior_dataset(data_config: _config.DataConfig, action_horizon: int
     Returns:
         Dataset instance with BEHAVIOR-1K data
     """
+    # 2026 challenge: LeRobot v3 dataset, selected by task index
+    if getattr(data_config, "task_indices", None):
+        from b1k.training.lerobot_v3 import B1KLeRobotV3Dataset
+
+        dataset = B1KLeRobotV3Dataset(
+            root=data_config.behavior_dataset_root,
+            task_indices=data_config.task_indices,
+            camera_keys=camera_keys,
+            action_horizon=action_horizon,
+            action_key=data_config.action_sequence_keys[0],
+            episodes=data_config.episodes_index,
+        )
+        if data_config.prompt_from_task:
+            raise ValueError("prompt_from_task is not supported for the 2026 LeRobot v3 loader")
+        return dataset
+
     from omnigibson.learning.datas.lerobot_dataset import BehaviorLeRobotDataset
     
     # Use random seed if not provided
@@ -239,7 +260,12 @@ def create_behavior_data_loader(
         seed = int(time.time() * 1000) % (2**32)
         logging.info(f"Using random seed: {seed}")
     
-    dataset = create_behavior_dataset(data_config, action_horizon=config.model.action_horizon, seed=seed)
+    dataset = create_behavior_dataset(
+        data_config,
+        action_horizon=config.model.action_horizon,
+        seed=seed,
+        camera_keys=tuple(getattr(config.data, "camera_keys", ())),
+    )
     dataset = transform_dataset(dataset, data_config, skip_norm_stats=skip_norm_stats)
 
     data_loader = TorchDataLoader(

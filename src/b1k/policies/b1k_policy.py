@@ -12,7 +12,10 @@ import numpy as np
 
 from openpi import transforms
 from openpi.models import model as _model
-from omnigibson.learning.utils.eval_utils import PROPRIOCEPTION_INDICES
+try:  # BEHAVIOR-1K >= v3.9 (2026 challenge)
+    from omnigibson.eval.utils.eval_utils import PROPRIOCEPTION_INDICES
+except ImportError:  # BEHAVIOR-1K 2025 challenge releases
+    from omnigibson.learning.utils.eval_utils import PROPRIOCEPTION_INDICES
 
 
 def make_b1k_example() -> dict:

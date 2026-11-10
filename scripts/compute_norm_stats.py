@@ -62,13 +62,32 @@ def apply_delta_transform_from_config(state: np.ndarray, actions: np.ndarray, ma
     return delta_actions
 
 
+
+def _read_episode(episode_file):
+    """Read one episode: a v2 per-episode parquet path or a 2026 LeRobot v3 EpisodeRef."""
+    if hasattr(episode_file, "read"):
+        return episode_file.read(columns=("observation.state", "action"))
+    return pd.read_parquet(episode_file)
+
+
+def _find_episodes(data_config):
+    """2026: episodes of the config's tasks from the LeRobot v3 metadata; 2025: data/task-*/episode_*.parquet."""
+    task_indices = getattr(data_config, "task_indices", None)
+    if task_indices:
+        from b1k.training.lerobot_v3 import list_episodes
+
+        episodes = list_episodes(str(Path(data_config.behavior_dataset_root).expanduser()), task_indices=task_indices)
+        print(f"LeRobot v3: {len(episodes)} episodes for tasks {tuple(task_indices)}")
+        return episodes
+    return sorted(Path(data_config.behavior_dataset_root).expanduser().glob("data/task-*/episode_*.parquet"))
+
 def process_episode_file(args):
     """Process a single episode file and return statistics."""
     episode_file, delta_mask, action_horizon, compute_per_timestamp, compute_correlation, sample_fraction = args
     
     try:
         # Read parquet file directly
-        df = pd.read_parquet(episode_file)
+        df = _read_episode(episode_file)
         
         # Extract states and actions
         states = []
@@ -506,9 +525,9 @@ def main(
     
     # Find all episode parquet files
     data_root = Path(data_config.behavior_dataset_root)
-    print(f"Looking for episode files in: {data_root}/data/task-*/episode_*.parquet")
+    print(f"Looking for episodes in: {data_root}")
     
-    episode_files = list(data_root.glob("data/task-*/episode_*.parquet"))
+    episode_files = _find_episodes(data_config)
     print(f"Found {len(episode_files)} total episode files")
     
     if max_episodes is not None:

@@ -53,12 +53,31 @@ def apply_delta_transform(state: np.ndarray, actions: np.ndarray, mask) -> np.nd
     return delta_actions
 
 
+
+def _read_episode(episode_file):
+    """Read one episode: a v2 per-episode parquet path or a 2026 LeRobot v3 EpisodeRef."""
+    if hasattr(episode_file, "read"):
+        return episode_file.read(columns=("observation.state", "action"))
+    return pd.read_parquet(episode_file)
+
+
+def _find_episodes(data_config):
+    """2026: episodes of the config's tasks from the LeRobot v3 metadata; 2025: data/task-*/episode_*.parquet."""
+    task_indices = getattr(data_config, "task_indices", None)
+    if task_indices:
+        from b1k.training.lerobot_v3 import list_episodes
+
+        episodes = list_episodes(str(Path(data_config.behavior_dataset_root).expanduser()), task_indices=task_indices)
+        print(f"LeRobot v3: {len(episodes)} episodes for tasks {tuple(task_indices)}")
+        return episodes
+    return sorted(Path(data_config.behavior_dataset_root).expanduser().glob("data/task-*/episode_*.parquet"))
+
 def process_episode_file(args):
     """Process episode file and return action chunks."""
     episode_file, delta_mask, action_horizon, sample_fraction = args
     
     try:
-        df = pd.read_parquet(episode_file)
+        df = _read_episode(episode_file)
         
         states = []
         raw_actions = []
@@ -256,7 +275,7 @@ def main(
     
     # Find episode files
     data_root = Path(data_config.behavior_dataset_root)
-    all_episode_files = sorted(data_root.glob("data/task-*/episode_*.parquet"))
+    all_episode_files = _find_episodes(data_config)
 
     episode_files = all_episode_files
     print(f"Using all {len(episode_files)} episodes")

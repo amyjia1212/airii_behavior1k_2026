@@ -12,8 +12,10 @@ import tyro
 os.environ.setdefault('XLA_PYTHON_CLIENT_MEM_FRACTION', '0.5')  # Use 50% of GPU memory
 os.environ.setdefault('XLA_PYTHON_CLIENT_ALLOCATOR', 'platform')  # Platform allocator
 
-from omnigibson.learning.utils.network_utils import WebsocketPolicyServer
-from omnigibson.learning.datas import BehaviorLerobotDatasetMetadata
+try:  # BEHAVIOR-1K >= v3.9 (2026 challenge)
+    from omnigibson.eval.utils.network_utils import WebsocketPolicyServer
+except ImportError:  # BEHAVIOR-1K 2025 challenge releases
+    from omnigibson.learning.utils.network_utils import WebsocketPolicyServer
 
 from openpi.policies import policy as _policy
 
@@ -54,11 +56,11 @@ class Args:
     # If provided, will be used in case the "prompt" key is not present in the data, or if the model doesn't have a default prompt.
     default_prompt: str | None = None
     
-    # For PI_BEHAVIOR models: task ID (0-49) instead of text prompt
+    # For PI_BEHAVIOR models: task ID (0-99 for 2026) instead of text prompt
     task_id: int | None = None
 
     # Dataset root, used to retrieve the prompt of the task if taskname is not None.
-    dataset_root: str | None = "/scr/behavior/2025-challenge-demos"
+    dataset_root: str | None = None  # unused by PI_BEHAVIOR (kept for CLI compatibility)
     # If provided, will be used to retrieve the prompt of the task, otherwise use turning_on_radio as default.
     task_name: str | None = None
 
@@ -79,6 +81,10 @@ class Args:
     time_threshold_inpaint: float = 0.3
     num_steps: int = 20
     apply_eval_tricks: bool = True  # Enable correction rules and gripper variation checks
+    # 2026 additions (see README "Evaluation"): our 2026 checkpoints use 280x280 inputs and gripper recovery 90/15
+    image_size: int = 224
+    gripper_stuck_steps: int = 0
+    gripper_open_hold_steps: int = 15
     
     # Multi-checkpoint support for PI_BEHAVIOR models (optional)
     task_checkpoint_mapping: str | None = None  # Path to task-checkpoint mapping JSON file
@@ -149,9 +155,12 @@ def main(args: Args) -> None:
         time_threshold_inpaint=args.time_threshold_inpaint,
         num_steps=args.num_steps,
         apply_eval_tricks=args.apply_eval_tricks,
+        image_size=args.image_size,
+        gripper_stuck_steps=args.gripper_stuck_steps,
+        gripper_open_hold_steps=args.gripper_open_hold_steps,
     )
     
-    logging.info(f"Wrapper config: execute={wrapper_config.actions_to_execute}, keep={wrapper_config.actions_to_keep}, steps={wrapper_config.execute_in_n_steps}, num_steps={wrapper_config.num_steps}")
+    logging.info(f"Wrapper config: execute={wrapper_config.actions_to_execute}, keep={wrapper_config.actions_to_keep}, steps={wrapper_config.execute_in_n_steps}, num_steps={wrapper_config.num_steps}, image_size={wrapper_config.image_size}, gripper_recovery={wrapper_config.gripper_stuck_steps}/{wrapper_config.gripper_open_hold_steps}")
     
     if wrapper_config.apply_eval_tricks:
         logging.info("Eval tricks ENABLED - correction rules and gripper variation checks active")

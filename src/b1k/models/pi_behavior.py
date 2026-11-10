@@ -152,7 +152,7 @@ class PiBehavior(_model.BaseModel):
         self.subtask_encoding_dim = config.task_embedding_dim // 2  # Half of task embedding dim (1024)
         
         # Task-specific stage embeddings (one per stage per task)
-        # Total embeddings = sum of stages across all tasks (596 for 5-15 stages per task)
+        # Total embeddings = sum of stages across all tasks (1087 for the 100 2026 tasks)
         self.task_stage_embeddings = nnx.Embed(
             num_embeddings=TOTAL_TASK_STAGE_EMBEDDINGS,
             features=self.subtask_encoding_dim,
@@ -696,7 +696,9 @@ class PiBehavior(_model.BaseModel):
         losses = {}
 
         preprocess_rng, rng = jax.random.split(rng)
-        observation = preprocess_observation(preprocess_rng, observation, train=train)
+        observation = preprocess_observation(
+            preprocess_rng, observation, train=train, image_resolution=tuple(self.config.image_resolution)
+        )
 
         batch_size = actions.shape[0]
         
@@ -912,7 +914,9 @@ class PiBehavior(_model.BaseModel):
         noise: at.Float[at.Array, "b ah ad"] | None = None,
         initial_actions: at.Float[at.Array, "b n ad"] | None = None,
     ) -> _model.Actions:
-        observation = preprocess_observation(None, observation, train=False)
+        observation = preprocess_observation(
+            None, observation, train=False, image_resolution=tuple(self.config.image_resolution)
+        )
         # Note that we use the convention more common in diffusion literature, where t=1 is noise and t=0 is the target
         # distribution. yes, this is the opposite of the pi0 paper, and I'm sorry.
         dt = -1.0 / num_steps
