@@ -71,14 +71,17 @@ All runs use batch 16, AdamW (β = 0.9/0.95, weight decay 1e-10, gradient clip 1
 
 | Stage | Models | Init | Steps | Peak → final LR | Hardware |
 |---|---|---|---|---|---|
-| 1 | 5-task base: 90, 91, 93, 96, 97 | 2025 50-task ckpt | 100k | 5e-5 → 5e-6* | not recorded* |
+| 1 | 5-task base: 90, 91, 93, 96, 97 | 2025 50-task ckpt | 50k + 50k* | 5e-5 → 5e-6* | 1× A100-80GB PCIe, bf16 Adam μ |
 | 2 | chunks {50,70,72,85}, {52,53,73,66,86}, {65,71,74,75}, {79,81,84,88}, {94,95,98} | stage 1 | 50k | 5e-5 → 5e-6 | one 5× A100-80GB PCIe pod (one run per GPU), bf16 Adam μ |
 | 3a | single-task 50, 52, 72 | 2025 ckpt | 10k | 3e-5 → 3e-6 | 1× A100 |
 | 3b | single-task 53, 65, 66, 71, 74 | 2025 ckpt | 6k | 1e-4 → 1e-5 | 2× A100-SXM4 (FSDP) |
 | 3c | single-task 79, 81, 86, 94 | stage-2 chunk | 10k | 1e-4 → 1e-5 | 2× A100-SXM4 (FSDP) |
 | 3d | continued 52, 53 | stage 3a/3b | +10k | 1e-4 → 1e-5 | 2× A100-SXM4 (FSDP) |
 
-\* The stage-1 model was trained by us, but its W&B logs were deleted to free space, so its LR schedule and hardware are not recorded (see README, "Reconstruction notes").
+\* The stage-1 W&B project was deleted; these settings come from our run notes. The schedule decays over the first 50k steps;
+the model was then trained for another 50k steps, and the LR of that continuation is not recorded. Batch 32 did not fit
+(about 109 GB of GPU memory), so we used batch 16 with the first Adam moment in bf16. The container's 117 GB RAM limit forced
+us down to 4 data workers, because each checkpoint save copies about 44 GB to host memory.
 
 Stage 2 was set up as an experiment: does fine-tuning from a model already trained on several 2026 tasks generalise better
 than training each task from the 2025 checkpoint? The plan was batch 32 at 280 px per 80 GB GPU, stepping down (smaller batch,

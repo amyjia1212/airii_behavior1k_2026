@@ -44,7 +44,7 @@ Our team trained models for 95 of the 100 tasks. Each task was routed to a check
 | Data | Standalone **LeRobot v3** reader for `behavior-1k/2026-challenge-demos` (shared parquet/mp4 files, HEVC video via PyAV) with task selection. The norm-stats and FAST-tokenizer scripts read v3 episodes too | `training/lerobot_v3.py`, `training/data_loader.py`, `scripts/compute_norm_stats.py`, `scripts/train_fast_tokenizer.py` |
 | Training infra | Checkpoints are uploaded to Hugging Face every N steps (pods were ephemeral); W&B entity and run names; bf16 Adam first moment (`mu_dtype`); `max_to_keep`; data workers restarted after each checkpoint | `scripts/train.py`, `training/config.py`, `training/checkpoints.py`, `training/configs_2026.py` |
 | Eval (original code) | Batched 2026 policy server with per-env state and in-memory checkpoint switching; 280px resize; vendored 2026 proprioception indices; **gripper recovery** (a gripper that stays fully closed, or is blocked while commanded open, for 90 steps is forced open for 15); full-resolution RGB eval wrapper and eval harness | `scripts/serve_b1k_2026.py`, `shared/eval_b1k_wrapper.py`, `shared/eval_2026_compat.py`, `policies/`, `patches/openpi-2026.diff`, `eval/harness/` |
-| Configs | All 2026 training configs (19 recovered from W&B and 1 partly assumed, see notes) | `training/configs_2026.py` |
+| Configs | All 2026 training configs (19 recovered from W&B and 1 from our run notes, see notes) | `training/configs_2026.py` |
 
 The model architecture and losses are unchanged from 2025: task and stage conditioning, FAST auxiliary loss, KV transform, correlated noise, per-timestep normalisation, and the inference-time inpainting and compression. See [docs/README_2025.md](docs/README_2025.md) and the [2025 write-up](https://github.com/IliaLarchenko/behavior-1k-solution).
 
@@ -78,7 +78,7 @@ uv run scripts/download_checkpoints.py          # 8 checkpoints -> ~/models (ove
 | [`amyjia1212/b1k-2026-t65-71-74-75`](https://huggingface.co/amyjia1212/b1k-2026-t65-71-74-75/tree/main/step_049999) `step_049999` | 65, 71, 74, 75 | `pi_behavior_b1k_2026_c3` |
 | [`amyjia1212/b1k-2026-t79-81-84-88`](https://huggingface.co/amyjia1212/b1k-2026-t79-81-84-88/tree/main/step_049999) `step_049999` | 79, 84, 88 | `pi_behavior_b1k_2026_c4` |
 | [`amyjia1212/b1k-2026-t81-ft10k`](https://huggingface.co/amyjia1212/b1k-2026-t81-ft10k/tree/main/step_009999) `step_009999` | 81 | `pi_behavior_b1k_2026_t81_ft10k` |
-| [`amyjia1212/b1k-2026-t90-91-93-96-97`](https://huggingface.co/amyjia1212/b1k-2026-t90-91-93-96-97/tree/main/step_099999) `step_099999` | 90, 91, 93, 96, 97 | `pi_behavior_b1k_2026_t5_base` (partly assumed) |
+| [`amyjia1212/b1k-2026-t90-91-93-96-97`](https://huggingface.co/amyjia1212/b1k-2026-t90-91-93-96-97/tree/main/step_099999) `step_099999` | 90, 91, 93, 96, 97 | `pi_behavior_b1k_2026_t5` |
 | [`amyjia1212/b1k-2026-t94-95-98`](https://huggingface.co/amyjia1212/b1k-2026-t94-95-98/tree/main/step_049999) `step_049999` | 94, 95, 98 | `pi_behavior_b1k_2026_c5` |
 
 Each checkpoint folder has `params/` (Orbax) and `assets/behavior-1k/2026-challenge-demos/`, which holds the norm stats with the action correlation matrix and the FAST tokenizer. The task → checkpoint routing is in [`task_checkpoint_mapping_2026.json`](task_checkpoint_mapping_2026.json).
@@ -148,7 +148,7 @@ Our training was staged; [REPORT.md](REPORT.md) has the full description:
 | Stage | Configs | Init | Steps | LR (cosine, peak → final) |
 |---|---|---|---|---|
 | 0 | n/a | [`IliaLarchenko/behavior_50t_checkpoint`](https://huggingface.co/IliaLarchenko/behavior_50t_checkpoint) (2025 50-task generalist) | n/a | n/a |
-| 1 | `pi_behavior_b1k_2026_t5_base` (tasks 90, 91, 93, 96, 97) | stage 0 | 100k | 5e-5 → 5e-6 *(assumed)* |
+| 1 | `pi_behavior_b1k_2026_t5` (tasks 90, 91, 93, 96, 97) | stage 0 | 50k + 50k | 5e-5 → 5e-6 over the first 50k; continuation LR not recorded |
 | 2 | `pi_behavior_b1k_2026_c1` … `c5` (4–5 tasks each) | stage 1, step 99,999 | 50k | 5e-5 → 5e-6 |
 | 3a | `pi_behavior_b1k_2026_s50`, `s52`, `s72` | stage 0 | 10k | 3e-5 → 3e-6 (decay 30k) |
 | 3b | `pi_behavior_b1k_2026_t53`, `t65`, `t66`, `t71`, `t74` | stage 0 | 6k | 1e-4 → 1e-5 (decay 20k) |
@@ -238,7 +238,8 @@ Two caveats as of 2026-11-09: the task-37 repo below returns 404 (it is private 
 | Component | Source | Status |
 |---|---|---|
 | Hyperparameters, task splits, init checkpoints, step counts, GPUs | W&B run configs and commands (19 runs) | **exact** |
-| Stage-1 5-task model config (`t5_base`) | Trained by us; its W&B logs were deleted to free space. Tasks, steps (100k), save interval (1k) and the init (`behavior_50t_checkpoint`) are known from the HF repo and our notes; the LR schedule is **assumed** equal to stage 2 | partly assumed |
+| Stage-1 5-task model config (`t5`) | Its W&B project was deleted. Our run notes of 2026-09-26 give the init, batch 16, optimizer, LR schedule (5e-5 → 5e-6 over 50k), EMA and hardware; the HF upload history shows 50k steps by 2026-09-29, then a continuation to 100k (2026-10-03 to 10-05) whose LR is not recorded | **from notes**, except the continuation LR |
+| Stage counts of tasks 96 and 97 in the 5-task model | Our 2026-09-26 run notes give 5 stages for task 96 and 15 for task 97 (from demo lengths). The eval-side table, used for all evaluations, has 10 and 10. Both put tasks 96 + 97 in the same 20 rows (1047–1066), so the checkpoint loads either way, but if the notes are right, task 97 reads its stage rows shifted by 5. Tasks 96 and 97 were never self-evaluated with the corrected table, so this is unverified | **open question** |
 | `TASK_NUM_STAGES` for tasks 50–99 | Original eval code; total of 1087 checked against checkpoint tensor shapes | **original** |
 | Embedding extension and position-embedding interpolation | Re-implemented from the training log messages; output shapes checked against checkpoints | re-implemented, unit-tested |
 | LeRobot v3 reader | Re-implemented; states, actions and frames checked bit-exact against the raw 2026 dataset | re-implemented, tested |

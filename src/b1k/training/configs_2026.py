@@ -135,22 +135,25 @@ def make_2026_configs(TrainConfig, LeRobotB1KDataConfig, DataConfig) -> list:
     configs = []
 
     # ---- stage 1: 5-task base model --------------------------------------------------------------------------
-    # NOTE: the W&B logs of this run were deleted to free space. Tasks, step count (step_099999), save interval
-    # and the 50-task init are known from the checkpoint repo and our notes; the remaining hyperparameters
-    # are ASSUMED to match the stage-2 chunk runs below.
+    # Settings from our run notes of 2026-09-26 (the W&B project of this run was deleted): 1x A100-80GB PCIe,
+    # batch 16 (32 needed ~109 GB) without gradient accumulation, AdamW with bf16 first moment, 1k warm-up to 5e-5
+    # and cosine decay to 5e-6 over 50k steps, EMA 0.99, 4 data workers (the container had a 117 GB RAM limit),
+    # weights pushed to HF every 1k steps. The first 50k steps ended 2026-09-29 (step_049999); the run was then
+    # continued to 100k (2026-10-03..05, step_099999). The LR of that continuation is not recorded: resuming
+    # this config with the same schedule keeps it at the final 5e-6, which is what num_train_steps=100k does here.
     configs.append(
         TrainConfig(
-            name="pi_behavior_b1k_2026_t5_base",
+            name="pi_behavior_b1k_2026_t5",
             exp_name="t90-91-93-96-97",
             project_name="b1k-2026",
             data=data([90, 91, 93, 96, 97]),
             lr_schedule=_optimizer.CosineDecaySchedule(
-                warmup_steps=1000, peak_lr=5e-5, decay_steps=100_000, decay_lr=5e-6
+                warmup_steps=1000, peak_lr=5e-5, decay_steps=50_000, decay_lr=5e-6
             ),
             optimizer=AdamWMuDtype(mu_dtype="bfloat16"),
             weight_loader=weight_loaders.PiBehaviorWeightLoader(INIT_50T),
             num_train_steps=100_000,
-            num_workers=8,
+            num_workers=4,
             keep_period=None,
             max_to_keep=2,
             fsdp_devices=1,
