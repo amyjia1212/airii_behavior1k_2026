@@ -101,6 +101,7 @@ def _ckpt(*parts: str) -> str:
 # Init checkpoints (local paths; scripts/download_checkpoints.py fetches the HF ones into B1K_MODELS_DIR)
 INIT_50T = _ckpt("behavior_50t_checkpoint")
 INIT_T5_BASE = _ckpt("b1k-2026-t90-91-93-96-97", "step_099999")
+INIT_T5_50K = _ckpt("b1k-2026-t90-91-93-96-97", "step_049999")
 
 
 def make_2026_configs(TrainConfig, LeRobotB1KDataConfig, DataConfig) -> list:
@@ -139,8 +140,7 @@ def make_2026_configs(TrainConfig, LeRobotB1KDataConfig, DataConfig) -> list:
     # batch 16 (32 needed ~109 GB) without gradient accumulation, AdamW with bf16 first moment, 1k warm-up to 5e-5
     # and cosine decay to 5e-6 over 50k steps, EMA 0.99, 4 data workers (the container had a 117 GB RAM limit),
     # weights pushed to HF every 1k steps. The first 50k steps ended 2026-09-29 (step_049999); the run was then
-    # continued to 100k (2026-10-03..05, step_099999). The LR of that continuation is not recorded: resuming
-    # this config with the same schedule keeps it at the final 5e-6, which is what num_train_steps=100k does here.
+    # continued for another 50k steps with a warm restart (2026-10-03..05, step_099999): see `t5_cont` below.
     configs.append(
         TrainConfig(
             name="pi_behavior_b1k_2026_t5",
@@ -152,13 +152,42 @@ def make_2026_configs(TrainConfig, LeRobotB1KDataConfig, DataConfig) -> list:
             ),
             optimizer=AdamWMuDtype(mu_dtype="bfloat16"),
             weight_loader=weight_loaders.PiBehaviorWeightLoader(INIT_50T),
-            num_train_steps=100_000,
+            num_train_steps=50_000,
             num_workers=4,
             keep_period=None,
             max_to_keep=2,
             fsdp_devices=1,
             hf_repo_id=f"{HF_USER}/b1k-2026-t90-91-93-96-97",
             hf_push_interval=1000,  # the published repo has a checkpoint every 1000 steps
+            restart_data_workers_after_checkpoint=True,
+            **{**common, "save_interval": 1000},
+        )
+    )
+    # Stage-1 continuation, steps 50k-100k (published as step_055000 ... step_099999). Its LR was not recorded;
+    # we MEASURED it from the published checkpoints. With Adam, the weight change between two checkpoints is
+    # proportional to the LR; over the first 50k (known schedule) the ratio for task_stage_embeddings is constant
+    # (44-50 per 5k steps for LRs from 4.3e-5 down to 5.4e-6). Applied to 50k-100k, it gives an LR of about 1.7e-5
+    # at 50k-60k, falling along a cosine to about 5e-6 at 95k-100k: a warm restart with a peak of about 1.8e-5
+    # (+-10%) decaying to 5e-6. 2e-5 is our best guess for the value we typed. Here the step counter restarts at 0
+    # and the optimizer state starts fresh, so checkpoint step N here corresponds to published step 50k + N.
+    configs.append(
+        TrainConfig(
+            name="pi_behavior_b1k_2026_t5_cont",
+            exp_name="t90-91-93-96-97-cont",
+            project_name="b1k-2026",
+            data=data([90, 91, 93, 96, 97]),
+            lr_schedule=_optimizer.CosineDecaySchedule(
+                warmup_steps=1000, peak_lr=2e-5, decay_steps=50_000, decay_lr=5e-6
+            ),
+            optimizer=AdamWMuDtype(mu_dtype="bfloat16"),
+            weight_loader=weight_loaders.PiBehaviorWeightLoader(INIT_T5_50K),
+            num_train_steps=50_000,
+            num_workers=4,
+            keep_period=None,
+            max_to_keep=2,
+            fsdp_devices=1,
+            hf_repo_id=f"{HF_USER}/b1k-2026-t90-91-93-96-97-cont",
+            hf_push_interval=5000,
             restart_data_workers_after_checkpoint=True,
             **{**common, "save_interval": 1000},
         )

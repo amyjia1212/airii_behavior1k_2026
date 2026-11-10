@@ -27,6 +27,7 @@ EVAL_CHECKPOINTS = {
 
 # extra checkpoints used only as initialisation by the stage-3 configs
 TRAINING_INITS = {
+    "b1k-2026-t90-91-93-96-97": ["step_049999"],  # init of the stage-1 continuation (pi_behavior_b1k_2026_t5_cont)
     "b1k-2026-t52": ["step_009999"],
     "b1k-2026-t53": ["step_005999"],
 }
