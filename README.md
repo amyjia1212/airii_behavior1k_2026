@@ -31,6 +31,7 @@ The model is **PI_BEHAVIOR**, the π0.5-based policy from the [1st-place 2025 so
 Our team trained models for 95 of the 100 tasks. Each task was routed to a checkpoint trained by one team member, and almost all of them build on the same PI_BEHAVIOR base.
 
 * **`src/`, `scripts/`, `eval/`**: the pipeline that produced the checkpoints for 25 tasks (50, 52, 53, 65, 66, 70–75, 79, 81, 84–86, 88, 90, 91, 93–98). It is described below and in [REPORT.md](REPORT.md).
+* **[`early_experiments/`](early_experiments/)**: our first, plain openpi π0.5 runs on tasks 90, 93 and 96 (not submitted), with the original pod setup and checkpoint-backup scripts and the lessons learned.
 * **[`teammates/`](teammates/)**: the other members' code, or links to where it is published, with a table of who trained which tasks, with which model and init, and the scores they reported. Some of it is still missing; the list is in [`teammates/README.md`](teammates/README.md#still-needed-status-as-of-2026-11-09).
 
 ### Changes vs. the 2025 solution

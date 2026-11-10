@@ -80,6 +80,11 @@ All runs use batch 16, AdamW (β = 0.9/0.95, weight decay 1e-10, gradient clip 1
 
 \* The stage-1 model was trained by us, but its W&B logs were deleted to free space, so its LR schedule and hardware are not recorded (see README, "Reconstruction notes").
 
+Stage 2 was set up as an experiment: does fine-tuning from a model already trained on several 2026 tasks generalise better
+than training each task from the 2025 checkpoint? The plan was batch 32 at 280 px per 80 GB GPU, stepping down (smaller batch,
+remat, and lower resolution only as a last resort) if it ran out of memory. The logged runs use batch 16 at 280 px.
+Before PI_BEHAVIOR, we also tried the plain openpi π0.5 baseline on tasks 90, 93 and 96 ([`early_experiments/`](early_experiments/)).
+
 Choosing the init was the first issue we ran into. In the corrected (stagefix) evaluations, the single-task models fine-tuned
 directly from the 2025 checkpoint (stage 3a/3b) scored 0 on 7 of their 8 tasks: 50, 53, 65, 66, 71, 72 and 74. Only
 `sorting_bottles_cans_and_paper` (task 52) reached 0.05–0.075. The stage-2 chunk models, initialised from a model that had already
