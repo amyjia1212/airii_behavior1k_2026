@@ -9,3 +9,6 @@
 [submodule "teammates/scarlett"]
 	path = teammates/scarlett
 	url = https://github.com/shi3bis/1k-repo-scarlett.git
+[submodule "teammates/rena_richard"]
+	path = teammates/rena_richard
+	url = https://github.com/Rena-Tian/b1k-2026-pipeline

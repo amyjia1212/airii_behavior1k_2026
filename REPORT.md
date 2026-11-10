@@ -149,7 +149,9 @@ no model). Almost every member fine-tuned the same 2025 PI_BEHAVIOR model, but w
 * **Plain π0.5 (openpi)** for tasks 55 (jermo1120), 69 (Rena-Tian), 77 (hlhl188, LoRA) and 83 (angegiga, with a stuck-recovery
   wrapper; 3/10 successes).
 
-The per-member details, code locations and reported scores are in [`teammates/README.md`](teammates/README.md).
+Rena-Tian and RichardCTian's pipeline (code snapshot, diffs against upstream, scripts and runbook) is included as the
+[`teammates/rena_richard`](teammates/rena_richard) submodule. The per-member details, code locations and reported scores are in
+[`teammates/README.md`](teammates/README.md).
 
 ## References
 
