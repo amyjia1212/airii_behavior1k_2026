@@ -4,7 +4,8 @@
 
 > **Scope.** Our team's submission combined models trained by several team members. This report covers the
 > **PI_BEHAVIOR pipeline**, which produced the checkpoints for 25 of the 100 tasks (50, 52, 53, 65, 66, 70–75, 79, 81, 84–86,
-> 88, 90, 91, 93–98). All numbers below are our own self-evaluation on public test instances, not official hidden-test results.
+> 88, 90, 91, 93–98). Section 8 gives a short overview of the other team members' approaches. All numbers are self-evaluations
+> on public test instances, not official hidden-test results.
 
 ## 1. Summary
 
@@ -25,7 +26,7 @@ On the public instances 0–9, the 20 self-evaluated tasks reach a mean **Q-scor
 
 ## 2. Background: PI_BEHAVIOR
 
-PI_BEHAVIOR (Larchenko, 2025) modifies π0.5 (PaliGemma 2B VLM and a 300M action expert, flow matching, 30-step action chunks over
+PI_BEHAVIOR (Larchenko, Zarin and Karnatak, 2025) modifies π0.5 (PaliGemma 2B VLM and a 300M action expert, flow matching, 30-step action chunks over
 the 23-D R1Pro action space):
 
 * **No language prompt.** The task is given by a learned **task embedding**. The current **stage** of the task (episodes are split
@@ -72,7 +73,7 @@ All runs use batch 16, AdamW (β = 0.9/0.95, weight decay 1e-10, gradient clip 1
 | 3c | single-task 79, 81, 86, 94 | stage-2 chunk | 10k | 1e-4 → 1e-5 | 2× A100-SXM4 (FSDP) |
 | 3d | continued 52, 53 | stage 3a/3b | +10k | 1e-4 → 1e-5 | 2× A100-SXM4 (FSDP) |
 
-\* The stage-1 W&B run was not recovered (see README, "Reconstruction notes").
+\* The stage-1 model was trained by us, but its W&B logs were deleted to free space, so its LR schedule and hardware are not recorded (see README, "Reconstruction notes").
 
 Choosing the init was the first issue we ran into. Single-task models fine-tuned directly from the 2025 checkpoint (stage 3a/3b)
 scored 0 on 7 of their 8 tasks at every evaluated step (for example `freeze_fruit` at 2k–10k steps and `tidying_living_room` at
@@ -126,8 +127,26 @@ differences below about 0.1 on 10 rollouts as noise.
   code in this repository was rebuilt from those records, as described in the README. Next time the code would be pushed to git from
   the start.
 
+## 8. Team overview
+
+The final submission routed each task to the best checkpoint any team member had for it (95 tasks; 13, 41, 49, 58 and 68 had
+no model). Almost every member fine-tuned the same 2025 PI_BEHAVIOR model, but with different 2026 adaptations:
+
+* **50-slot reuse** (fei777, Rena-Tian, RichardCTian, estjtmi, jermo1120 for task 38, Blakesss). 2026 tasks 0–49 are the 2025
+  tasks, so the 2025 task slots, stage tables and 224 px inputs were kept, starting from a 2025 checkpoint
+  (for example `behavior_submission` checkpoint 1 or 2). fei777 also served new tasks (51, 61, 76, 82, 92) through borrowed 2025 slots that
+  have no task-specific correction rules. Rena-Tian and RichardCTian used low-LR (5e-6) fine-tunes with skill-annotation stages for
+  many tasks. Their reported Q-scores reach 0.60 (task 45), 0.57 (task 1) and 0.58 (task 22, Blakesss).
+* **100-task extensions** like ours, starting from `behavior_50t_checkpoint`, but with different stage tables: 1105 stages
+  (Rena-Tian and RichardCTian, for new tasks such as 54, 56, 62, 64, 67, 89, 99) and 627–673 stages (Scarlett/shi2bis, joint
+  multi-task models).
+* **Plain π0.5 (openpi)** for tasks 55 (jermo1120), 69 (Rena-Tian), 77 (hlhl188, LoRA) and 83 (angegiga, with a stuck-recovery
+  wrapper; 3/10 successes).
+
+The per-member details, code locations and reported scores are in [`teammates/README.md`](teammates/README.md).
+
 ## References
 
-* I. Larchenko. *1st place solution, 2025 BEHAVIOR Challenge.* https://github.com/IliaLarchenko/behavior-1k-solution
+* I. Larchenko, G. Zarin, A. Karnatak. *1st place solution, 2025 BEHAVIOR Challenge.* https://arxiv.org/abs/2512.06951, https://github.com/IliaLarchenko/behavior-1k-solution
 * Physical Intelligence. *π0.5: a Vision-Language-Action Model with Open-World Generalization*, 2025. https://github.com/Physical-Intelligence/openpi
 * C. Li et al. *BEHAVIOR-1K: A Human-Centered, Embodied AI Benchmark with 1,000 Everyday Activities and Realistic Simulation.* https://behavior.stanford.edu

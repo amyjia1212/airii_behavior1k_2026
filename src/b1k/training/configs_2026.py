@@ -13,9 +13,9 @@ were replaced by environment variables so the configs work on any machine:
 
 Training recipe (see REPORT.md for the full write-up):
 
-  stage 0  `behavior_50t_checkpoint`: 2025 PI_BEHAVIOR checkpoint trained on the 50 tasks of the 2025 challenge.
+  stage 0  IliaLarchenko/behavior_50t_checkpoint: the 2025 winners' 50-task generalist PI_BEHAVIOR checkpoint.
   stage 1  t5 base: 5-task model on tasks 90/91/93/96/97, 100k steps, initialised from stage 0.
-           (published as amyjia1212/b1k-2026-t90-91-93-96-97; its W&B run was not recovered, see note below.)
+           (published as amyjia1212/b1k-2026-t90-91-93-96-97; its W&B logs were deleted, see note below.)
   stage 2  "chunk" models: 4-5 tasks each, 50k steps, initialised from the stage-1 model.
   stage 3  single-task fine-tunes (6k-10k steps) for tasks where a chunk model was weak, initialised either from
            stage 0 or from the corresponding chunk model.
@@ -135,8 +135,8 @@ def make_2026_configs(TrainConfig, LeRobotB1KDataConfig, DataConfig) -> list:
     configs = []
 
     # ---- stage 1: 5-task base model --------------------------------------------------------------------------
-    # NOTE: the W&B run for this model was not recovered. Tasks, step count (step_099999) and the
-    # 50-task init are known from the checkpoint repo / downstream configs; the remaining hyperparameters
+    # NOTE: the W&B logs of this run were deleted to free space. Tasks, step count (step_099999), save interval
+    # and the 50-task init are known from the checkpoint repo and our notes; the remaining hyperparameters
     # are ASSUMED to match the stage-2 chunk runs below.
     configs.append(
         TrainConfig(

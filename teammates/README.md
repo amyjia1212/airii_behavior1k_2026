@@ -1,0 +1,47 @@
+# Team code and checkpoints
+
+Our 2026 submission routed each task to a checkpoint trained by one team member. Almost every member built on the
+same base, the 2025 1st-place PI_BEHAVIOR solution (π0.5 with task-ID and stage embeddings), with their own 2026 data
+pipeline and recipe. A few checkpoints are plain openpi π0.5. This folder collects the team members' code, or points to
+where it is published.
+
+**Columns:**
+- **Model**: PIB = PI_BEHAVIOR; π0.5 = openpi π0.5 (language-conditioned). Table sizes come from the checkpoints' own metadata.
+- **Init**: `50t` = [`IliaLarchenko/behavior_50t_checkpoint`](https://huggingface.co/IliaLarchenko/behavior_50t_checkpoint); `ckptN` = [`IliaLarchenko/behavior_submission`](https://huggingface.co/IliaLarchenko/behavior_submission) `checkpoint_N`.
+- **Reported Q**: self-evaluation from each model card, using the leaderboard protocol (public instances 0–9, 1 rollout).
+  The protocol is the same as ours, but the runs, pods and settings differ.
+
+| Member (HF) | Tasks in submission | Model | Init | Code | Reported Q |
+|---|---|---|---|---|---|
+| amyjia1212 | 50, 52, 53, 65, 66, 70–75, 79, 81, 84–86, 88, 90, 91, 93–98 | PIB, 100 tasks, 1087 stages, 280 px | 50t | this repository (`src/`, `scripts/`) | see `results/SELF_EVAL_2026.md` |
+| fei777 | 2, 3, 6, 19, 23, 28, 33, 36, 39, 44, 47, 48, 51, 61, 76, 82, 92 | PIB, 50 slots (new tasks borrow a 2025 slot), 224 px | ckpt1 / 50t | [`fei777/`](fei777/) (full tree + `uv.lock` + lerobot patch, from the HF model repos) | not in model cards |
+| Rena-Tian | 1, 4, 8, 9, 14, 16, 20, 21, 26, 34, 42, 43, 45, 46, 56, 78, 89, 99 | PIB (50 slots, or 100 tasks with 1105 stages) | ckpt2 / 50t | **missing**: model cards refer to a team "pipeline repo" | 0.03–0.60 (e.g. task 45: 0.60, task 1: 0.567, task 16: 0.50) |
+| Rena-Tian | 69 | π0.5 (openpi, 3-task model for tasks 34/63/69) | pi05_base | **missing** (`pi05_b1k_3task_calib` config) | 0.00 |
+| RichardCTian | 7, 10, 11, 12, 15, 17, 18, 24, 25, 29, 30, 32, 40, 54, 59, 62, 64, 67 | PIB (50 slots, or 100 tasks with 1105 stages) | ckpt2 / 50t | **missing**: same "pipeline repo" | 0.04–0.40 (e.g. task 40: 0.40, task 12: 0.367, task 30: 0.363) |
+| shi2bis / shi3bis (Scarlett) | 0, 35, 60, 63, 80, 87 | PIB, 100 tasks, 627–673 stages, 224 px | 50t | [`scarlett/`](scarlett/) submodule ([shi3bis/1k-repo-scarlett](https://github.com/shi3bis/1k-repo-scarlett)). **Partial**: the pushed code reserves 627 stages, but the joint checkpoints have 649 / 656 / 673 | `eval_metrics.json` in HF repos |
+| Blakesss | 22 | PIB | 2025 ckpt | archived in the HF repo ([`archives/current_policy.tar.zst`, patches, `RESTORE_OFFICIAL.md`](https://huggingface.co/Blakesss/task22-pi05-backup/tree/task22-official-final-backup-20261004-075738-UTC)) | 0.58 (2/10 successes) |
+| jermo1120 | 38 | PIB | ckpt (behavior_submission) | **missing** | 0.20 |
+| jermo1120 | 55 | π0.5 (openpi, full fine-tune from pi05_base) | pi05_base | [`jermo1120/`](jermo1120/) patches (from the HF model repo) | 0.067 |
+| jermo1120 | 37 | ? | ? | **checkpoint repo not found** (`jermo1120/b1k-task37-clean-a-trumpet-25k` is 404) | ? |
+| angegiga | 83 | π0.5 (openpi, `wensi-ai/openpi` behavior branch + patches) | pi05_base | in the HF repo ([`openpi_patches/`, `rebuild.sh`, `SUBMISSION.md`](https://huggingface.co/angegiga/pi05-store-honey)) | 3/10 successes |
+| estjtmi | 5, 27, 31 | PIB, 50 slots | ? | **missing** (no model card) | ? |
+| Luke-Xing | 57 | PIB + LoRA | ? | **missing** (no model card) | ? |
+| hlhl188 | 77 | π0.5 + LoRA (`cluster_installing_devices_lora_v1`) | ? | **missing** (no model card) | ? |
+
+Tasks 13, 41, 49, 58 and 68 had no trained model.
+
+**Provenance of the vendored code:**
+- `fei777/` is the `code.tgz` tree uploaded with fei777's checkpoints for tasks 4/23/48, 51/61 and 76/82/92.
+  The checkpoints for 2/3/6/19/28/44/46/47 and 33/36/39 were trained with the same tree except for `src/b1k/training/config.py`,
+  and those two config versions are in `fei777/config_variants/`.
+- `jermo1120/` holds the patches uploaded with `jermo1120/pi05-b1k-task55-re-shelving-library-books`.
+- `scarlett/` is a git submodule pinned to `shi3bis/1k-repo-scarlett@4b2436f`.
+
+## Still needed (status as of 2026-11-09)
+
+1. Rena-Tian and RichardCTian: the shared "pipeline repo" (`behavior-1k-solution` with the `pi_behavior_b1k_2026_task*` configs), which covers 36 tasks.
+2. estjtmi (tasks 5, 27, 31), Luke-Xing (57), hlhl188 (77), jermo1120 (38): code, configs, and ideally a model card.
+3. jermo1120: make the task-37 checkpoint public, or give its correct repo name.
+4. Scarlett: push the code used for the `joint_*` checkpoints, and say which sub-checkpoint of each `joint_*` repo was submitted
+   (the repos hold several, e.g. `joint_35_63_78_noise_step22500` and `joint_35_63_78_pickup_step27500`).
+5. Rena-Tian: the openpi config for the task-69 model.

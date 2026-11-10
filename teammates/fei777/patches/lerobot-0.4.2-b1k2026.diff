@@ -1,0 +1,66 @@
+--- a/lerobot/datasets/lerobot_dataset.py	2026-10-14 17:29:27.243497631 +0000
++++ b/lerobot/datasets/lerobot_dataset.py	2026-10-14 10:07:13.257405035 +0000
+@@ -726,10 +726,10 @@
+         # Build a mapping: absolute_index -> relative_index_in_filtered_dataset
+         self._absolute_to_relative_idx = None
+         if self.episodes is not None:
+-            self._absolute_to_relative_idx = {
+-                abs_idx.item() if isinstance(abs_idx, torch.Tensor) else abs_idx: rel_idx
+-                for rel_idx, abs_idx in enumerate(self.hf_dataset["index"])
+-            }
++            # Patched (b1k2026): build the mapping from the arrow column directly; iterating the
++            # torch-formatted column row by row takes tens of minutes for millions of frames.
++            _abs_idx = self.hf_dataset.data.column("index").to_numpy()
++            self._absolute_to_relative_idx = dict(zip(_abs_idx.tolist(), range(len(_abs_idx))))
+ 
+         # Setup delta_indices
+         if self.delta_timestamps is not None:
+@@ -1030,7 +1030,10 @@
+ 
+         query_indices = None
+         if self.delta_indices is not None:
+-            query_indices, padding = self._get_query_indices(idx, ep_idx)
++            # Patched (b1k2026): _get_query_indices compares against absolute dataset indices
++            # (dataset_from_index/dataset_to_index); with an episode subset `idx` is relative.
++            abs_idx = item["index"].item() if self._absolute_to_relative_idx is not None else idx
++            query_indices, padding = self._get_query_indices(abs_idx, ep_idx)
+             query_result = self._query_hf_dataset(query_indices)
+             item = {**item, **padding}
+             for key, val in query_result.items():
+--- a/lerobot/datasets/video_utils.py	2026-10-14 17:29:27.244497637 +0000
++++ b/lerobot/datasets/video_utils.py	2026-10-14 10:39:51.365892481 +0000
+@@ -15,6 +15,7 @@
+ # limitations under the License.
+ import glob
+ import importlib
++import os
+ import logging
+ import shutil
+ import tempfile
+@@ -188,12 +189,20 @@
+         video_path = str(video_path)
+ 
+         with self._lock:
+-            if video_path not in self._cache:
+-                file_handle = fsspec.open(video_path).__enter__()
+-                decoder = VideoDecoder(file_handle, seek_mode="approximate")
+-                self._cache[video_path] = (decoder, file_handle)
+-
+-            return self._cache[video_path][0]
++            # Patched (b1k2026): bounded LRU. The unbounded cache keeps one open decoder per mp4 shard in
++            # every data-loader worker (hundreds per worker for multi-task subsets) and exhausts host RAM.
++            if video_path in self._cache:
++                entry = self._cache.pop(video_path)
++                self._cache[video_path] = entry
++                return entry[0]
++            while len(self._cache) >= int(os.environ.get("LEROBOT_MAX_CACHED_DECODERS", "16")):
++                _, (_, old_handle) = next(iter(self._cache.items()))
++                del self._cache[next(iter(self._cache))]
++                old_handle.close()
++            file_handle = fsspec.open(video_path).__enter__()
++            decoder = VideoDecoder(file_handle, seek_mode="approximate")
++            self._cache[video_path] = (decoder, file_handle)
++            return decoder
+ 
+     def clear(self):
+         """Clear the cache and close file handles."""

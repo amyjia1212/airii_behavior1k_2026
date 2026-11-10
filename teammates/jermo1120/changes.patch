@@ -1,0 +1,177 @@
+diff --git a/scripts/b1k/serve_b1k.py b/scripts/b1k/serve_b1k.py
+index 9410b9d..8f2fa22 100644
+--- a/scripts/b1k/serve_b1k.py
++++ b/scripts/b1k/serve_b1k.py
+@@ -35,6 +35,10 @@ class Args:
+     control_mode: str = "receding_horizon"
+     # Number of actions to execute before replanning.
+     action_horizon: int = 16
++    # Missed-grasp recovery: open a gripper that stays closed on nothing (receding_horizon mode only).
++    gripper_recovery: bool = True
++    # Consecutive replans with an empty, closed gripper before forcing it open.
++    gripper_recovery_patience: int = 3
+     # Port to serve the policy on.
+     port: int = 8000
+     # Record the policy's behavior for debugging.
+@@ -72,6 +76,8 @@ def main(args: Args) -> None:
+         control_mode=args.control_mode,
+         action_horizon=args.action_horizon,
+         max_len=config.model.action_horizon,
++        gripper_recovery=args.gripper_recovery,
++        gripper_recovery_patience=args.gripper_recovery_patience,
+     )
+ 
+     hostname = socket.gethostname()
+diff --git a/src/openpi/configs/tasks/b1k.py b/src/openpi/configs/tasks/b1k.py
+index 193c4e7..f2a79f9 100644
+--- a/src/openpi/configs/tasks/b1k.py
++++ b/src/openpi/configs/tasks/b1k.py
+@@ -2,6 +2,8 @@ from . import TASK_REGISTRY
+ 
+ # i3l task prompts
+ TASKS = {
++    # Prompt must match training: prompt_from_task uses the raw task name from meta/tasks.parquet.
++    "re_shelving_library_books": "re_shelving_library_books",
+     "turning_on_radio": "Turn on the radio receiver that's on the table in the living room.",
+ }
+ 
+diff --git a/src/openpi/shared/eval_b1k_wrapper.py b/src/openpi/shared/eval_b1k_wrapper.py
+index 0bcc41f..2fdf791 100644
+--- a/src/openpi/shared/eval_b1k_wrapper.py
++++ b/src/openpi/shared/eval_b1k_wrapper.py
+@@ -1,9 +1,18 @@
++import logging
++
+ import numpy as np
+ import torch
+ from openpi_client.base_policy import BasePolicy
+ from openpi_client.image_tools import resize_with_pad
+ from openpi.configs.robots import ROBOT_REGISTRY
+ 
++logger = logging.getLogger(__name__)
++
++# Gripper recovery (missed grasp): R1Pro gripper actions are -1 closed / +1 open; proprio finger qpos is
++# 0..0.05 m per finger. A closed gripper holding nothing reads ~0, while one holding a book stays well above.
++EMPTY_GRIPPER_WIDTH = 0.004  # sum of both finger qpos (m) below which the gripper is closed on nothing
++GRIPPER_CLOSE_CMD = 0.0  # mean commanded gripper action below this means the plan keeps it closed
++
+ 
+ class B1KPolicyWrapper:
+     def __init__(
+@@ -15,6 +24,8 @@ class B1KPolicyWrapper:
+         action_horizon: int,
+         max_len: int,
+         obs_size: tuple[int, int] = (224, 224),
++        gripper_recovery: bool = False,
++        gripper_recovery_patience: int = 3,
+     ) -> None:
+         # Load robot config from registry
+         self.robot = ROBOT_REGISTRY[robot]
+@@ -25,6 +36,10 @@ class B1KPolicyWrapper:
+         self.obs_size = obs_size
+         self.max_len = max_len
+         self.temporal_ensemble_max = 5  # max number of sequences to ensemble
++        self.gripper_recovery = gripper_recovery
++        # Consecutive replans with an empty, closed gripper before forcing it open.
++        self.gripper_recovery_patience = gripper_recovery_patience
++        self.empty_closed_count = None  # Shape: (batch, num_grippers)
+ 
+         # Extract gripper indices from robot config (end-effectors to preserve)
+         self.gripper_indices = []
+@@ -46,6 +61,7 @@ class B1KPolicyWrapper:
+         self.sequence_lengths = None
+         self.num_active_sequences = None
+         self.step_counter = None
++        self.empty_closed_count = None
+         self.policy.reset()
+ 
+     def _ensure_batch_initialized(self, batch_size: int, action_dim: int = None):
+@@ -115,6 +131,32 @@ class B1KPolicyWrapper:
+         pos_idx = safe_indices[:, :, None]
+         return self.action_buffer[batch_idx, seq_idx, pos_idx].squeeze(-2)
+ 
++    def _apply_gripper_recovery(self, env_idx: int, proprio: np.ndarray, actions: np.ndarray) -> np.ndarray:
++        """Missed-grasp recovery: if a gripper has been closed on nothing for `gripper_recovery_patience`
++        consecutive replans while the new plan still keeps it closed, open it for this chunk so the policy can
++        re-attempt the grasp. Adapted from the 2025 1st-place solution's gripper correction rules."""
++        if self.empty_closed_count is None or self.empty_closed_count.shape[0] != self.batch_size:
++            self.empty_closed_count = np.zeros((self.batch_size, 2), dtype=np.int32)
++        eef_proprio = [c for c in self.robot.proprio if c.is_eef]
++        eef_action = [c for c in self.robot.action if c.is_eef]
++        executed = actions[: self.action_horizon]
++        for g, (prop_cfg, act_cfg) in enumerate(zip(eef_proprio, eef_action, strict=True)):
++            width = float(np.sum(proprio[prop_cfg.indices]))
++            commanded_closed = float(np.mean(executed[:, act_cfg.indices])) < GRIPPER_CLOSE_CMD
++            if width < EMPTY_GRIPPER_WIDTH and commanded_closed:
++                self.empty_closed_count[env_idx, g] += 1
++            else:
++                self.empty_closed_count[env_idx, g] = 0
++            if self.empty_closed_count[env_idx, g] >= self.gripper_recovery_patience:
++                logger.info(
++                    "Gripper recovery: env %d %s closed on nothing (width %.4f) for %d replans -> opening",
++                    env_idx, act_cfg.name, width, self.empty_closed_count[env_idx, g],
++                )
++                actions = actions.copy()
++                actions[:, act_cfg.indices] = 1.0
++                self.empty_closed_count[env_idx, g] = 0
++        return actions
++
+     def act_receding_horizon(self, input_obs):
+         """
+         receding horizon: execute actions from current plan for up to action_horizon steps, then replan.
+@@ -143,6 +185,12 @@ class B1KPolicyWrapper:
+                 action_dim = target_action.shape[2]
+                 self._ensure_batch_initialized(batch_size, action_dim)
+ 
++            if self.gripper_recovery:
++                for j, i in enumerate(indices_needing_inference):
++                    target_action[j] = self._apply_gripper_recovery(
++                        i, input_batch[i]["observation/state"], target_action[j]
++                    )
++
+             # Store actions in buffer
+             seq_len = min(target_action.shape[1], self.max_len)
+             self.action_buffer[indices_needing_inference, 0, :seq_len] = target_action[:, :seq_len]
+diff --git a/src/openpi/training/config.py b/src/openpi/training/config.py
+index ec6cd0f..59b3f55 100644
+--- a/src/openpi/training/config.py
++++ b/src/openpi/training/config.py
+@@ -772,6 +772,38 @@ _CONFIGS = [
+         assets_base_dir="./outputs/assets",
+         checkpoint_base_dir="./outputs/checkpoints",
+     ),
++    TrainConfig(
++        # pi0.5 base fine-tuned on 2026 B100 task 55 only (chunk-055 of 2026-challenge-demos).
++        name="pi05_b1k_task55",
++        exp_name="re_shelving_library_books",
++        model=pi0_config.Pi0Config(action_horizon=32, pi05=True),
++        data=LeRobotB1KDataConfig(
++            repo_id="re_shelving_library_books",
++            base_config=DataConfig(
++                data_cls=_lerobot_compat.LeRobotDataset,
++                dataset_root="/root/b1k55/demos_rgb",  # RGB-only view of 2026-challenge-demos (depth dropped)
++                prompt_from_task=True,
++                # Only chunk-055 is downloaded; task 55 is episodes 11000-11199.
++                dataset_kwargs={"tolerance_s": 5e-4, "episodes": list(range(11_000, 11_200))},
++            ),
++            robot_config_name="b1k/R1Pro",
++        ),
++        weight_loader=weight_loaders.CheckpointWeightLoader("gs://openpi-assets/checkpoints/pi05_base/params"),
++        lr_schedule=_optimizer.CosineDecaySchedule(
++            warmup_steps=1_000,
++            peak_lr=2.5e-5,
++            decay_steps=25_000,
++            decay_lr=2.5e-6,
++        ),
++        num_train_steps=25_000,
++        batch_size=32,
++        num_workers=6,  # RAM capped at 125 GB; a checkpoint save peaks ~110 GB (43 GB host copy + dirty page cache). 6 workers feed ~22 samples/s
++        save_interval=2_500,
++        keep_period=5_000,
++        wandb_enabled=False,
++        assets_base_dir="./outputs/assets",
++        checkpoint_base_dir="./outputs/checkpoints",
++    ),
+     #
+     # Fine-tuning Libero configs.
+     #

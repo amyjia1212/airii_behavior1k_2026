@@ -2,7 +2,7 @@
 
 Code, configs and checkpoints for our team's 2026 [BEHAVIOR Challenge](https://behavior.stanford.edu/challenge/) entry (standard track, R1Pro, RGB + proprioception).
 
-The model is **PI_BEHAVIOR**, the π0.5-based policy from the [1st-place 2025 solution](https://github.com/IliaLarchenko/behavior-1k-solution) by Ilia Larchenko. We adapted it to the 2026 challenge, which has 100 tasks, a LeRobot v3 dataset and BEHAVIOR-1K v3.9.3. This repository is a fork of that solution: its full git history is kept, and everything 2026-specific is in the commits on top.
+The model is **PI_BEHAVIOR**, the π0.5-based policy from the [1st-place 2025 solution](https://github.com/IliaLarchenko/behavior-1k-solution) by Ilia Larchenko, Gleb Zarin and Akash Karnatak ([paper](https://arxiv.org/abs/2512.06951)). We adapted it to the 2026 challenge, which has 100 tasks, a LeRobot v3 dataset and BEHAVIOR-1K v3.9.3. This repository is a fork of that solution: its full git history is kept, and everything 2026-specific is in the commits on top.
 
 * **Technical report:** [REPORT.md](REPORT.md)
 * **Self-evaluation results:** [results/SELF_EVAL_2026.md](results/SELF_EVAL_2026.md)
@@ -28,7 +28,10 @@ The model is **PI_BEHAVIOR**, the π0.5-based policy from the [1st-place 2025 so
 
 ## What's in this repository
 
-Our team trained models for 95 of the 100 tasks. Different team members used different models; **this repository contains the PI_BEHAVIOR pipeline, which produced the checkpoints for 25 tasks** (50, 52, 53, 65, 66, 70–75, 79, 81, 84–86, 88, 90, 91, 93–98). The checkpoints for the other tasks were produced by teammates, and their code will be added to this repository (see [Team checkpoints](#team-checkpoints)).
+Our team trained models for 95 of the 100 tasks. Each task was routed to a checkpoint trained by one team member, and almost all of them build on the same PI_BEHAVIOR base.
+
+* **`src/`, `scripts/`, `eval/`**: the pipeline that produced the checkpoints for 25 tasks (50, 52, 53, 65, 66, 70–75, 79, 81, 84–86, 88, 90, 91, 93–98). It is described below and in [REPORT.md](REPORT.md).
+* **[`teammates/`](teammates/)**: the other members' code, or links to where it is published, with a table of who trained which tasks, with which model and init, and the scores they reported. Some of it is still missing; the list is in [`teammates/README.md`](teammates/README.md#still-needed-status-as-of-2026-11-09).
 
 ### Changes vs. the 2025 solution
 
@@ -139,7 +142,7 @@ Our training was staged; [REPORT.md](REPORT.md) has the full description:
 
 | Stage | Configs | Init | Steps | LR (cosine, peak → final) |
 |---|---|---|---|---|
-| 0 | n/a | 2025 PI_BEHAVIOR 50-task checkpoint (`behavior_50t_checkpoint`) | n/a | n/a |
+| 0 | n/a | [`IliaLarchenko/behavior_50t_checkpoint`](https://huggingface.co/IliaLarchenko/behavior_50t_checkpoint) (2025 50-task generalist) | n/a | n/a |
 | 1 | `pi_behavior_b1k_2026_t5_base` (tasks 90, 91, 93, 96, 97) | stage 0 | 100k | 5e-5 → 5e-6 *(assumed)* |
 | 2 | `pi_behavior_b1k_2026_c1` … `c5` (4–5 tasks each) | stage 1, step 99,999 | 50k | 5e-5 → 5e-6 |
 | 3a | `pi_behavior_b1k_2026_s50`, `s52`, `s72` | stage 0 | 10k | 3e-5 → 3e-6 (decay 30k) |
@@ -147,11 +150,13 @@ Our training was staged; [REPORT.md](REPORT.md) has the full description:
 | 3c | `pi_behavior_b1k_2026_t79_ft10k`, `t81_ft10k`, `t86_ft10k`, `t94_ft10k` | matching stage-2 chunk | 10k | 1e-4 → 1e-5 |
 | 3d | `pi_behavior_b1k_2026_t52_cont10k`, `t53_cont10k` | stage-3a / 3b result | 10k | 1e-4 → 1e-5 |
 
-All stages use batch 16, EMA 0.99, 15 flow samples per step, the FAST auxiliary loss (weight 0.05) and the subtask loss (0.1), with the vision backbone frozen. Set `$B1K_MODELS_DIR` and put the stage-0 checkpoint at `$B1K_MODELS_DIR/behavior_50t_checkpoint/params`. `scripts/download_checkpoints.py --training-inits` fetches the remaining init checkpoints.
+All stages use batch 16, EMA 0.99, 15 flow samples per step, the FAST auxiliary loss (weight 0.05) and the subtask loss (0.1), with the vision backbone frozen. `uv run scripts/download_checkpoints.py --training-inits` downloads every init checkpoint into `$B1K_MODELS_DIR` (default `~/models`), including the stage-0 checkpoint `IliaLarchenko/behavior_50t_checkpoint`.
 
 ## Team checkpoints
 
-The full routing of our team's submission is below; ✅ marks the tasks that use checkpoints from this repository. Rows without ✅ link to teammates' Hugging Face repos; their training code is being added to this repository. Tasks 13, 41, 49, 58 and 68 had no trained model.
+The full routing of our team's submission is below; ✅ marks the tasks that use checkpoints from this repository. For who trained the other checkpoints, how, and where their code is, see [`teammates/README.md`](teammates/README.md). Tasks 13, 41, 49, 58 and 68 had no trained model.
+
+Two caveats as of 2026-11-09: the task-37 repo below returns 404 (it is private or was renamed), and the `shi2bis/joint_*` repos each hold several sub-checkpoints, and which one was submitted is still being confirmed.
 
 <details>
 <summary>Task → checkpoint table (100 tasks)</summary>
@@ -228,7 +233,7 @@ The full routing of our team's submission is below; ✅ marks the tasks that use
 | Component | Source | Status |
 |---|---|---|
 | Hyperparameters, task splits, init checkpoints, step counts, GPUs | W&B run configs and commands (19 runs) | **exact** |
-| Stage-1 5-task model config (`t5_base`) | Tasks, steps and init from the HF repo and downstream configs; LR schedule **assumed** equal to stage 2 | partly assumed |
+| Stage-1 5-task model config (`t5_base`) | Trained by us; its W&B logs were deleted to free space. Tasks, steps (100k), save interval (1k) and the init (`behavior_50t_checkpoint`) are known from the HF repo and our notes; the LR schedule is **assumed** equal to stage 2 | partly assumed |
 | `TASK_NUM_STAGES` for tasks 50–99 | Recomputed from dataset metadata; total of 1087 checked against checkpoint tensor shapes | verified |
 | Embedding extension and position-embedding interpolation | Re-implemented from the training log messages; output shapes checked against checkpoints | re-implemented, unit-tested |
 | LeRobot v3 reader | Re-implemented; states, actions and frames checked bit-exact against the raw 2026 dataset | re-implemented, tested |
@@ -240,4 +245,4 @@ The full routing of our team's submission is below; ✅ marks the tasks that use
 
 ## Acknowledgements and license
 
-Built on the [2025 BEHAVIOR Challenge 1st-place solution](https://github.com/IliaLarchenko/behavior-1k-solution) by Ilia Larchenko, [openpi](https://github.com/Physical-Intelligence/openpi) (via the [BEHAVIOR fork](https://github.com/wensi-ai/openpi)) and [BEHAVIOR-1K](https://github.com/StanfordVL/BEHAVIOR-1K). Licensed under Apache-2.0, the same as the original solution ([LICENSE](LICENSE)).
+Built on the [2025 BEHAVIOR Challenge 1st-place solution](https://github.com/IliaLarchenko/behavior-1k-solution) by Ilia Larchenko, Gleb Zarin and Akash Karnatak ([arXiv:2512.06951](https://arxiv.org/abs/2512.06951)), [openpi](https://github.com/Physical-Intelligence/openpi) (via the [BEHAVIOR fork](https://github.com/wensi-ai/openpi)) and [BEHAVIOR-1K](https://github.com/StanfordVL/BEHAVIOR-1K). Licensed under Apache-2.0, the same as the original solution ([LICENSE](LICENSE)).

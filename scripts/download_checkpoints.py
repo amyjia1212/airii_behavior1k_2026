@@ -54,11 +54,10 @@ def main():
         )
 
     if args.training_inits:
-        print(
-            "\nNOTE: the stage-0 init `behavior_50t_checkpoint` (2025 PI_BEHAVIOR model on the 50 tasks of the 2025 "
-            "challenge) must be placed at "
-            f"{os.path.join(models_dir, 'behavior_50t_checkpoint', 'params')}. See README, 'Training from scratch'."
-        )
+        # Stage-0 init: the 2025 winners' 50-task generalist checkpoint (params/ + assets/ at the repo root)
+        local = os.path.join(models_dir, "behavior_50t_checkpoint")
+        print(f"IliaLarchenko/behavior_50t_checkpoint -> {local}")
+        snapshot_download(repo_id="IliaLarchenko/behavior_50t_checkpoint", local_dir=local)
 
 
 if __name__ == "__main__":

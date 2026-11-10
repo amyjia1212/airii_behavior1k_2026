@@ -6,3 +6,6 @@
 	path = BEHAVIOR-1K
 	url = https://github.com/StanfordVL/BEHAVIOR-1K.git
 	branch = main
+[submodule "teammates/scarlett"]
+	path = teammates/scarlett
+	url = https://github.com/shi3bis/1k-repo-scarlett.git
