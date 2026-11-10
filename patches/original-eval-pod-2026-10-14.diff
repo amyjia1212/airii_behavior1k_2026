@@ -1,0 +1,626 @@
+diff --git a/openpi b/openpi
+--- a/openpi
++++ b/openpi
+@@ -1 +1 @@
+-Subproject commit 01177e0242a1c7e8fad2547caa0e987def614cda
++Subproject commit 01177e0242a1c7e8fad2547caa0e987def614cda-dirty
+diff --git a/src/b1k/models/observation.py b/src/b1k/models/observation.py
+index 991d6f8..0c71855 100644
+--- a/src/b1k/models/observation.py
++++ b/src/b1k/models/observation.py
+@@ -26,7 +26,7 @@ IMAGE_KEYS = (
+     "left_wrist_0_rgb",
+     "right_wrist_0_rgb",
+ )
+-IMAGE_RESOLUTION = (224, 224)
++IMAGE_RESOLUTION = (280, 280)  # 2026 b1k checkpoint was trained at 280x280
+ 
+ 
+ @at.typecheck
+diff --git a/src/b1k/models/pi_behavior_config.py b/src/b1k/models/pi_behavior_config.py
+index d38897f..7391fa1 100644
+--- a/src/b1k/models/pi_behavior_config.py
++++ b/src/b1k/models/pi_behavior_config.py
+@@ -24,18 +24,26 @@ if TYPE_CHECKING:
+     from b1k.models.pi_behavior import PiBehavior
+ 
+ 
+-# Per-task stage counts (based on avg_episode_length / 900, capped between 5-15)
+-# Use tuple for immutability and to avoid JAX device allocation at import time
++# Per-task stage counts for the 2026 checkpoints, as given by the team that trained them (2026-10-14): tasks 0-49 keep
++# the 2025 counts, 10 stages for tasks 50-89, 92 and 94-99, 5 for task 93, and tasks 90 + 91 share 16 rows (5 + 11).
++# Sum 1087 = the checkpoint's task_stage_embeddings rows. (Until 2026-10-14 the evals used counts reconstructed from
++# demo lengths, round(avg_episode_length / 900) clipped to [5, 15], which also sum to 1087 but put every task from
++# 4 on at the wrong rows.)
+ TASK_NUM_STAGES = (
+     5, 6, 15, 15, 14, 12, 9, 15, 10, 15,  # Tasks 0-9
+     7, 13, 10, 15, 15, 15, 15, 11, 13, 12,  # Tasks 10-19
+     14, 15, 9, 15, 15, 15, 15, 15, 15, 15,  # Tasks 20-29
+     11, 10, 10, 13, 5, 5, 14, 6, 8, 10,  # Tasks 30-39
+     5, 15, 8, 15, 12, 11, 9, 14, 15, 15,  # Tasks 40-49
++    10, 10, 10, 10, 10, 10, 10, 10, 10, 10,  # Tasks 50-59
++    10, 10, 10, 10, 10, 10, 10, 10, 10, 10,  # Tasks 60-69
++    10, 10, 10, 10, 10, 10, 10, 10, 10, 10,  # Tasks 70-79
++    10, 10, 10, 10, 10, 10, 10, 10, 10, 10,  # Tasks 80-89
++    5, 11, 10, 5, 10, 10, 10, 10, 10, 10,  # Tasks 90-99
+ )
+ 
+ MAX_NUM_STAGES = 15  # Maximum stages per task
+-TOTAL_TASK_STAGE_EMBEDDINGS = sum(TASK_NUM_STAGES)  # 596 total embeddings
++TOTAL_TASK_STAGE_EMBEDDINGS = sum(TASK_NUM_STAGES)  # 1087 total embeddings
+ 
+ # Cumulative offsets for indexing into task_stage_embeddings (as tuple)
+ TASK_STAGE_OFFSETS = tuple([0] + [sum(TASK_NUM_STAGES[:i+1]) for i in range(len(TASK_NUM_STAGES) - 1)])
+diff --git a/src/b1k/policies/b1k_policy.py b/src/b1k/policies/b1k_policy.py
+index 140a5a2..ac0a336 100644
+--- a/src/b1k/policies/b1k_policy.py
++++ b/src/b1k/policies/b1k_policy.py
+@@ -12,7 +12,7 @@ import numpy as np
+ 
+ from openpi import transforms
+ from openpi.models import model as _model
+-from omnigibson.learning.utils.eval_utils import PROPRIOCEPTION_INDICES
++from b1k.shared.eval_2026_compat import PROPRIOCEPTION_INDICES
+ 
+ 
+ def make_b1k_example() -> dict:
+diff --git a/src/b1k/policies/pi_behavior_policy.py b/src/b1k/policies/pi_behavior_policy.py
+index 022198b..dc2f09c 100644
+--- a/src/b1k/policies/pi_behavior_policy.py
++++ b/src/b1k/policies/pi_behavior_policy.py
+@@ -45,46 +45,7 @@ class PiBehaviorPolicy(Policy):
+             sample_kwargs["noise"] = noise
+             
+         if initial_actions is not None:
+-            # Create training-format observation batch for proper transform processing
+-            training_obs = {}
+-            
+-            # Map evaluation keys to training keys if needed
+-            if "observation/state" in obs:
+-                training_obs["observation/state"] = obs["observation/state"]
+-            elif "state" in obs:
+-                training_obs["observation/state"] = obs["state"]
+-            
+-            if "observation/egocentric_camera" in obs:
+-                training_obs["observation/egocentric_camera"] = obs["observation/egocentric_camera"]
+-            elif "image" in obs and "base_0_rgb" in obs["image"]:
+-                training_obs["observation/egocentric_camera"] = obs["image"]["base_0_rgb"]
+-                
+-            if "observation/wrist_image_left" in obs:
+-                training_obs["observation/wrist_image_left"] = obs["observation/wrist_image_left"]
+-            elif "image" in obs and "left_wrist_0_rgb" in obs["image"]:
+-                training_obs["observation/wrist_image_left"] = obs["image"]["left_wrist_0_rgb"]
+-                
+-            if "observation/wrist_image_right" in obs:
+-                training_obs["observation/wrist_image_right"] = obs["observation/wrist_image_right"]
+-            elif "image" in obs and "right_wrist_0_rgb" in obs["image"]:
+-                training_obs["observation/wrist_image_right"] = obs["image"]["right_wrist_0_rgb"]
+-                
+-            # Copy any other keys that might be needed (tokenized_prompt, subtask_state, etc.)
+-            for key in obs:
+-                if key not in training_obs and key not in ["image", "state"]:
+-                    training_obs[key] = obs[key]
+-            
+-            initial_batch = {
+-                **training_obs,  # Include all observation data in training format
+-                "actions": initial_actions  # Add initial_actions as the actions field
+-            }
+-            
+-            # Apply the full input transform pipeline (delta transforms + normalization)
+-            transformed_batch = self._input_transform(initial_batch)
+-            normalized_initial_actions = transformed_batch["actions"]
+-            
+-            # Convert to JAX and add batch dim
+-            initial_actions = jnp.asarray(normalized_initial_actions)
++            initial_actions = jnp.asarray(self._transform_initial_actions(obs, initial_actions))
+             if initial_actions.ndim == 2:
+                 initial_actions = initial_actions[None, ...]
+             sample_kwargs["initial_actions"] = initial_actions
+@@ -120,6 +81,85 @@ class PiBehaviorPolicy(Policy):
+         }
+         return outputs
+ 
++    def _transform_initial_actions(self, obs: dict, initial_actions: np.ndarray) -> np.ndarray:
++        """Normalize raw inpainting actions with the same input transforms (delta + normalization) as training."""
++        # Create training-format observation batch for proper transform processing
++        training_obs = {}
++
++        # Map evaluation keys to training keys if needed
++        if "observation/state" in obs:
++            training_obs["observation/state"] = obs["observation/state"]
++        elif "state" in obs:
++            training_obs["observation/state"] = obs["state"]
++
++        if "observation/egocentric_camera" in obs:
++            training_obs["observation/egocentric_camera"] = obs["observation/egocentric_camera"]
++        elif "image" in obs and "base_0_rgb" in obs["image"]:
++            training_obs["observation/egocentric_camera"] = obs["image"]["base_0_rgb"]
++
++        if "observation/wrist_image_left" in obs:
++            training_obs["observation/wrist_image_left"] = obs["observation/wrist_image_left"]
++        elif "image" in obs and "left_wrist_0_rgb" in obs["image"]:
++            training_obs["observation/wrist_image_left"] = obs["image"]["left_wrist_0_rgb"]
++
++        if "observation/wrist_image_right" in obs:
++            training_obs["observation/wrist_image_right"] = obs["observation/wrist_image_right"]
++        elif "image" in obs and "right_wrist_0_rgb" in obs["image"]:
++            training_obs["observation/wrist_image_right"] = obs["image"]["right_wrist_0_rgb"]
++
++        # Copy any other keys that might be needed (tokenized_prompt, subtask_state, etc.)
++        for key in obs:
++            if key not in training_obs and key not in ["image", "state"]:
++                training_obs[key] = obs[key]
++
++        initial_batch = {
++            **training_obs,  # Include all observation data in training format
++            "actions": initial_actions  # Add initial_actions as the actions field
++        }
++
++        # Apply the full input transform pipeline (delta transforms + normalization)
++        return self._input_transform(initial_batch)["actions"]
++
++    def infer_batch(
++        self, obs_list: list[dict], initial_actions_list: list[np.ndarray] | None = None, pad_to: int = 0
++    ) -> list[dict]:
++        """Batched version of infer(): one model call for several independent observations.
++
++        Per-sample transforms are identical to infer(); only the model forward pass is batched.
++        initial_actions_list must be all-None or all-arrays. The batch is padded to `pad_to` by repeating the last
++        observation (outputs discarded) so the jitted sampler only ever sees a few distinct shapes.
++        """
++        n = len(obs_list)
++        if pad_to > n:
++            obs_list = list(obs_list) + [obs_list[-1]] * (pad_to - n)
++            if initial_actions_list is not None:
++                initial_actions_list = list(initial_actions_list) + [initial_actions_list[-1]] * (pad_to - n)
++        inputs_list = [self._input_transform(jax.tree.map(lambda x: x, obs)) for obs in obs_list]
++        inputs = jax.tree.map(lambda *xs: jnp.stack([jnp.asarray(x) for x in xs]), *inputs_list)
++        self._rng, sample_rng = jax.random.split(self._rng)
++
++        sample_kwargs = dict(self._sample_kwargs)
++        if initial_actions_list is not None:
++            sample_kwargs["initial_actions"] = jnp.stack(
++                [jnp.asarray(self._transform_initial_actions(obs, ia)) for obs, ia in zip(obs_list, initial_actions_list)]
++            )
++
++        observation = Observation.from_dict(inputs)
++        start_time = time.monotonic()
++        actions, subtask_logits = self._sample_actions(sample_rng, observation, **sample_kwargs)
++        actions, subtask_logits, states = np.asarray(actions), np.asarray(subtask_logits), np.asarray(inputs["state"])
++        model_time = time.monotonic() - start_time
++
++        results = []
++        for i in range(n):
++            outputs = self._output_transform(
++                {"state": states[i], "actions": actions[i], "subtask_logits": subtask_logits[i]}
++            )
++            outputs["predicted_stage"] = int(np.argmax(outputs["subtask_logits"]))
++            outputs["policy_timing"] = {"infer_ms": model_time * 1000}
++            results.append(outputs)
++        return results
++
+     @property
+     def metadata(self) -> dict[str, Any]:
+         return self._metadata
+diff --git a/src/b1k/policies/policy_config.py b/src/b1k/policies/policy_config.py
+index 18d97b9..13e96a7 100644
+--- a/src/b1k/policies/policy_config.py
++++ b/src/b1k/policies/policy_config.py
+@@ -34,6 +34,7 @@ def create_trained_policy(
+     default_prompt: str | None = None,
+     norm_stats: dict[str, transforms.NormStats] | None = None,
+     pytorch_device: str | None = None,
++    params: Any | None = None,
+ ) -> _policy.Policy:
+     """Create a policy from a trained checkpoint - EXACT COPY from openpi with b1k imports."""
+     repack_transforms = repack_transforms or transforms.Group()
+@@ -46,7 +47,10 @@ def create_trained_policy(
+         raise NotImplementedError("PyTorch inference not supported in b1k")
+     
+     # JAX model loading - load directly as bfloat16 to save memory (12GB vs 24GB)
+-    model = train_config.model.load(_model.restore_params(checkpoint_dir / "params", dtype=jnp.bfloat16))
++    # `params` lets callers pass weights restored earlier (e.g. kept in host memory to switch checkpoints quickly).
++    if params is None:
++        params = _model.restore_params(checkpoint_dir / "params", dtype=jnp.bfloat16)
++    model = train_config.model.load(params)
+     
+     # Get data config
+     data_config = train_config.data.create(train_config.assets_dirs, train_config.model)
+diff --git a/src/b1k/shared/eval_b1k_wrapper.py b/src/b1k/shared/eval_b1k_wrapper.py
+index c7766a5..f12a4d1 100644
+--- a/src/b1k/shared/eval_b1k_wrapper.py
++++ b/src/b1k/shared/eval_b1k_wrapper.py
+@@ -10,12 +10,26 @@ from openpi_client.base_policy import BasePolicy
+ from openpi_client.image_tools import resize_with_pad
+ from b1k.policies.b1k_policy import extract_state_from_proprio
+ from b1k.models.pi_behavior_config import TASK_NUM_STAGES
+-from b1k.shared.correction_rules import apply_correction_rules, check_gripper_variation
+-from omnigibson.learning.utils.eval_utils import PROPRIOCEPTION_INDICES
++from b1k.shared.correction_rules import (
++    apply_correction_rules,
++    check_gripper_variation,
++    CLOSED_THRESHOLD,
++    OPEN_THRESHOLD,
++    LEFT_GRIPPER_IDX,
++    RIGHT_GRIPPER_IDX,
++)
++from b1k.shared.eval_2026_compat import PROPRIOCEPTION_INDICES
+ 
+ logger = logging.getLogger(__name__)
+ 
+-RESIZE_SIZE = 224
++RESIZE_SIZE = 280  # must match the model's IMAGE_RESOLUTION
++
++# Gripper recovery ("blocked" detection): the executed command asks for a gripper at least this much wider
++# (normalized [-1, 1] units) than measured, yet the measured width moved less than BLOCKED_MOVE_EPS since
++# the previous observation.
++BLOCKED_CMD_GAP = 0.3
++BLOCKED_MOVE_EPS = 0.02
++GRIPPER_NAMES = {LEFT_GRIPPER_IDX: "left", RIGHT_GRIPPER_IDX: "right"}
+ 
+ 
+ @dataclasses.dataclass
+@@ -29,6 +43,10 @@ class B1KWrapperConfig:
+     time_threshold_inpaint: float = 0.3
+     num_steps: int = 20
+     apply_eval_tricks: bool = True
++    # Gripper recovery: force a gripper open for `gripper_recovery_hold_steps` env steps once it has been stuck
++    # (fully closed on nothing, or commanded open but not moving) for this many consecutive env steps. 0 disables.
++    gripper_recovery_steps: int = 0
++    gripper_recovery_hold_steps: int = 15
+ 
+ 
+ class B1KPolicyWrapper():
+@@ -67,7 +85,61 @@ class B1KPolicyWrapper():
+         self.step_count = 0
+         self.prediction_count = 0
+         self.next_initial_actions = None
+-    
++        self.gripper_recovery_count = 0
++        self._reset_gripper_recovery()
++
++    def _reset_gripper_recovery(self):
++        self._steps_since_obs = 0
++        self._gripper_stuck_steps = {idx: 0 for idx in GRIPPER_NAMES}
++        self._gripper_was_stuck = {idx: False for idx in GRIPPER_NAMES}
++        self._gripper_prev_width = {idx: None for idx in GRIPPER_NAMES}
++        self._gripper_last_cmd = {idx: None for idx in GRIPPER_NAMES}
++        self._gripper_force_open = {idx: 0 for idx in GRIPPER_NAMES}
++
++    def _update_gripper_recovery(self, state: np.ndarray) -> None:
++        """Track how long each gripper has been stuck and start a forced open once it exceeds the limit.
++
++        Called once per real observation; with client-side chunk replay that is every `execute_in_n_steps` env
++        steps, so the counter advances by the number of actions executed since the previous observation.
++        """
++        elapsed, self._steps_since_obs = self._steps_since_obs, 0
++        if self.config.gripper_recovery_steps <= 0:
++            return
++        for idx, name in GRIPPER_NAMES.items():
++            width = float(state[idx])
++            prev_width, self._gripper_prev_width[idx] = self._gripper_prev_width[idx], width
++            if self._gripper_force_open[idx] > 0:  # still opening from the last recovery
++                continue
++            cmd = self._gripper_last_cmd[idx]
++            fully_closed = width < CLOSED_THRESHOLD
++            blocked = (
++                cmd is not None
++                and prev_width is not None
++                and cmd - width > BLOCKED_CMD_GAP
++                and width < OPEN_THRESHOLD
++                and abs(width - prev_width) < BLOCKED_MOVE_EPS
++            )
++            if not (fully_closed or blocked):
++                self._gripper_stuck_steps[idx] = 0
++                self._gripper_was_stuck[idx] = False
++                continue
++            if self._gripper_was_stuck[idx]:
++                self._gripper_stuck_steps[idx] += elapsed
++            self._gripper_was_stuck[idx] = True
++            if self._gripper_stuck_steps[idx] >= self.config.gripper_recovery_steps:
++                reason = "fully closed" if fully_closed else "blocked"
++                logger.info(
++                    f"🖐️  Gripper recovery: {name} gripper {reason} for {self._gripper_stuck_steps[idx]} steps "
++                    f"(width {width:.3f}) → forcing open for {self.config.gripper_recovery_hold_steps} steps "
++                    f"(task {self.task_id}, stage {self.current_stage}, step {self.step_count})"
++                )
++                self._gripper_force_open[idx] = self.config.gripper_recovery_hold_steps
++                self._gripper_stuck_steps[idx] = 0
++                self._gripper_was_stuck[idx] = False
++                self.gripper_recovery_count += 1
++                # The previous plan's tail keeps the gripper shut; do not inpaint the next plan with it.
++                self.next_initial_actions = None
++
+     def reset(self):
+         """Reset policy state."""
+         self.policy.reset()
+@@ -78,6 +150,7 @@ class B1KPolicyWrapper():
+         self.next_initial_actions = None
+         self.current_stage = 0
+         self.prediction_history.clear()
++        self._reset_gripper_recovery()
+         logger.info(f"Policy reset - Task ID: {self.task_id}, Action horizon: {self.action_horizon}")
+     
+     def _handle_task_change(self, new_task_id):
+@@ -101,6 +174,7 @@ class B1KPolicyWrapper():
+             self.last_actions = None
+             self.action_index = 0
+             self.next_initial_actions = None
++            self._reset_gripper_recovery()
+ 
+     def process_obs(self, obs: dict) -> dict:
+         """Process observation to match model input format."""
+@@ -187,121 +261,140 @@ class B1KPolicyWrapper():
+         
+         return interpolated
+ 
+-    def act(self, obs: dict) -> torch.Tensor:
+-        """Main action function."""
+-        
+-        # Extract task_id from observations
++    def begin_step(self, obs: dict) -> np.ndarray:
++        """Handle task changes and return the current 23-dim state."""
+         if "task_id" in obs:
+             new_task_id = int(obs["task_id"][0])
+             self._handle_task_change(new_task_id)
+-        
+-        raw_state = obs["robot_r1::proprio"]
+-        current_state = extract_state_from_proprio(raw_state)
+-        
+-        # Check if we need new actions
+-        if self.last_actions is None or self.action_index >= self.config.execute_in_n_steps:
+-            
+-            # Process observation
+-            model_input = self.process_obs(obs)
+-            model_input = self.prepare_batch_for_pi_behavior(model_input)
+-            
+-            # Add rolling inpainting if available
+-            if self.next_initial_actions is not None and ("initial_actions" not in model_input or model_input["initial_actions"] is None):
+-                model_input["initial_actions"] = self.next_initial_actions
+-            
+-            # Get prediction
+-            if "initial_actions" in model_input and model_input["initial_actions"] is not None:
+-                output = self.policy.infer(model_input, initial_actions=model_input["initial_actions"])
+-            else:
+-                output = self.policy.infer(model_input)
+-            
+-            actions = output["actions"]
+-            
+-            # Ensure correct shape
+-            if len(actions.shape) == 3:
+-                actions = actions[0]
+-            if actions.shape[1] > 23:
+-                actions = actions[:, :23]
+-            
+-            # Apply eval tricks if enabled
+-            should_compress = self.config.execute_in_n_steps < self.config.actions_to_execute
+-            
+-            if self.config.apply_eval_tricks:
+-                if self.task_id is not None:
+-                    actions_before = actions.copy()
+-                    actions, corrected_stage = apply_correction_rules(
+-                        self.task_id, self.current_stage, current_state, actions
+-                    )
+-                    
+-                    # Log if stage was corrected
+-                    if corrected_stage != self.current_stage:
+-                        logger.info(f"🔧 Correction rule: Stage corrected {self.current_stage} → {corrected_stage} (task {self.task_id}, step {self.step_count})")
+-                        self.current_stage = corrected_stage
+-                        self.prediction_history.clear()
+-                    
+-                    # Log if actions were modified
+-                    if not np.allclose(actions_before, actions, rtol=1e-3):
+-                        max_diff = np.max(np.abs(actions_before - actions))
+-                        logger.info(f"🔧 Correction rule: Actions modified (max diff: {max_diff:.4f}, task {self.task_id}, stage {self.current_stage})")
+-                
+-                if should_compress:
+-                    has_high_variation, mean_var, max_var = check_gripper_variation(
+-                        actions, self.config.actions_to_execute
+-                    )
+-                    if has_high_variation:
+-                        should_compress = False
+-                        logger.info(f"🔧 Gripper variation: Compression disabled (mean: {mean_var:.4f}, max: {max_var:.4f})")
+-            
+-            # Determine execution parameters
+-            actions_to_execute = self.config.actions_to_execute if should_compress else self.config.execute_in_n_steps
+-            execute_steps = self.config.execute_in_n_steps
+-            
+-            # Save actions for next inpainting (before compression)
+-            inpainting_start = actions_to_execute
+-            inpainting_end = inpainting_start + self.config.actions_to_keep
+-            
+-            if len(actions) >= inpainting_end:
+-                self.next_initial_actions = actions[inpainting_start:inpainting_end].copy()
+-            else:
+-                self.next_initial_actions = None
+-            
+-            # Extract and compress actions
+-            self.last_actions = actions[:actions_to_execute].copy()
+-            
++        state = extract_state_from_proprio(obs["robot_r1::proprio"])
++        self._update_gripper_recovery(state)
++        return state
++
++    def needs_prediction(self) -> bool:
++        return self.last_actions is None or self.action_index >= self.config.execute_in_n_steps
++
++    def build_model_input(self, obs: dict) -> dict:
++        model_input = self.process_obs(obs)
++        model_input = self.prepare_batch_for_pi_behavior(model_input)
++        # Add rolling inpainting if available
++        if self.next_initial_actions is not None and ("initial_actions" not in model_input or model_input["initial_actions"] is None):
++            model_input["initial_actions"] = self.next_initial_actions
++        return model_input
++
++    def apply_prediction(self, output: dict, current_state: np.ndarray) -> None:
++        """Turn one model prediction into the queue of actions executed until the next replan."""
++        actions = output["actions"]
++
++        # Ensure correct shape
++        if len(actions.shape) == 3:
++            actions = actions[0]
++        if actions.shape[1] > 23:
++            actions = actions[:, :23]
++
++        # Apply eval tricks if enabled
++        should_compress = self.config.execute_in_n_steps < self.config.actions_to_execute
++
++        if self.config.apply_eval_tricks:
++            if self.task_id is not None:
++                actions_before = actions.copy()
++                actions, corrected_stage = apply_correction_rules(
++                    self.task_id, self.current_stage, current_state, actions
++                )
++
++                # Log if stage was corrected
++                if corrected_stage != self.current_stage:
++                    logger.info(f"🔧 Correction rule: Stage corrected {self.current_stage} → {corrected_stage} (task {self.task_id}, step {self.step_count})")
++                    self.current_stage = corrected_stage
++                    self.prediction_history.clear()
++
++                # Log if actions were modified
++                if not np.allclose(actions_before, actions, rtol=1e-3):
++                    max_diff = np.max(np.abs(actions_before - actions))
++                    logger.info(f"🔧 Correction rule: Actions modified (max diff: {max_diff:.4f}, task {self.task_id}, stage {self.current_stage})")
++
+             if should_compress:
+-                compressed_actions = self._interpolate_actions(self.last_actions, execute_steps)
+-                compression_factor = actions_to_execute / execute_steps
+-                compressed_actions[:, :3] *= compression_factor  # Scale velocities
+-                self.last_actions = compressed_actions
+-            
+-            self.action_index = 0
+-            self.prediction_count += 1
+-            
+-            # Log prediction details (at lower frequency, every 10 predictions)
+-            if self.prediction_count % 10 == 0:
+-                compression_status = f"compressed {actions_to_execute}→{execute_steps}" if should_compress else f"uncompressed ({execute_steps})"
+-                logger.info(f"🎯 Prediction #{self.prediction_count} | Actions: {compression_status} | Inpainting: {self.next_initial_actions is not None}")
+-            
+-            # Update stage based on model predictions
+-            if "subtask_logits" in output:
+-                self.update_current_stage(output["subtask_logits"])
+-        
+-        # Get current action from sequence
++                has_high_variation, mean_var, max_var = check_gripper_variation(
++                    actions, self.config.actions_to_execute
++                )
++                if has_high_variation:
++                    should_compress = False
++                    logger.info(f"🔧 Gripper variation: Compression disabled (mean: {mean_var:.4f}, max: {max_var:.4f})")
++
++        # Determine execution parameters
++        actions_to_execute = self.config.actions_to_execute if should_compress else self.config.execute_in_n_steps
++        execute_steps = self.config.execute_in_n_steps
++
++        # Save actions for next inpainting (before compression)
++        inpainting_start = actions_to_execute
++        inpainting_end = inpainting_start + self.config.actions_to_keep
++
++        if len(actions) >= inpainting_end:
++            self.next_initial_actions = actions[inpainting_start:inpainting_end].copy()
++        else:
++            self.next_initial_actions = None
++
++        # Extract and compress actions
++        self.last_actions = actions[:actions_to_execute].copy()
++
++        if should_compress:
++            compressed_actions = self._interpolate_actions(self.last_actions, execute_steps)
++            compression_factor = actions_to_execute / execute_steps
++            compressed_actions[:, :3] *= compression_factor  # Scale velocities
++            self.last_actions = compressed_actions
++
++        self.action_index = 0
++        self.prediction_count += 1
++
++        # Log prediction details (at lower frequency, every 10 predictions)
++        if self.prediction_count % 10 == 0:
++            compression_status = f"compressed {actions_to_execute}→{execute_steps}" if should_compress else f"uncompressed ({execute_steps})"
++            logger.info(f"🎯 Prediction #{self.prediction_count} | Actions: {compression_status} | Inpainting: {self.next_initial_actions is not None}")
++
++        # Update stage based on model predictions
++        if "subtask_logits" in output:
++            self.update_current_stage(output["subtask_logits"])
++
++    def next_action(self) -> torch.Tensor:
++        """Pop the next action from the current action queue."""
+         if self.action_index >= len(self.last_actions):
+             self.action_index = 0
+-            
+-        current_action = self.last_actions[self.action_index]
++
++        current_action = np.array(self.last_actions[self.action_index])
+         self.action_index += 1
+         self.step_count += 1
+-        
++        self._steps_since_obs += 1
++
++        for idx in GRIPPER_NAMES:
++            if self._gripper_force_open[idx] > 0:
++                current_action[idx] = 1.0
++                self._gripper_force_open[idx] -= 1
++            self._gripper_last_cmd[idx] = float(current_action[idx])
++
+         # Log progress every 100 steps
+         if self.step_count % 100 == 0:
+             logger.info(f"📊 Step {self.step_count} | Task: {self.task_id} | Stage: {self.current_stage}/{TASK_NUM_STAGES[self.task_id]-1} | Predictions: {self.prediction_count}")
+-        
++
+         # Convert to torch tensor
+         action_tensor = torch.from_numpy(current_action).float()
+         if len(action_tensor) > 23:
+             action_tensor = action_tensor[:23]
+-        
++
+         return action_tensor
+ 
++    def act(self, obs: dict) -> torch.Tensor:
++        """Main action function."""
++        current_state = self.begin_step(obs)
++
++        # Check if we need new actions
++        if self.needs_prediction():
++            model_input = self.build_model_input(obs)
++
++            # Get prediction
++            if "initial_actions" in model_input and model_input["initial_actions"] is not None:
++                output = self.policy.infer(model_input, initial_actions=model_input["initial_actions"])
++            else:
++                output = self.policy.infer(model_input)
++
++            self.apply_prediction(output, current_state)
++
++        return self.next_action()
+diff --git a/src/b1k/training/config.py b/src/b1k/training/config.py
+index 52dfb7d..ebd16ad 100644
+--- a/src/b1k/training/config.py
++++ b/src/b1k/training/config.py
+@@ -107,7 +107,7 @@ class ModelTransformFactory(GroupFactory):
+     def __call__(self, model_config: _model.BaseModelConfig) -> _transforms.Group:
+         return _transforms.Group(
+             inputs=[
+-                _transforms.ResizeImages(224, 224),
++                _transforms.ResizeImages(*_model.IMAGE_RESOLUTION),
+                 b1k_transforms.ComputeSubtaskStateFromMeta(dataset=None),
+                 b1k_transforms.TaskIndexToTaskId(),
+                 _transforms.PadStatesAndActions(model_config.action_dim),
+@@ -378,6 +378,18 @@ _CONFIGS = [
+     ),
+ ]
+ 
++# 2026 challenge variant: 100 task embeddings, norm stats / FAST tokenizer stored under the
++# behavior-1k/2026-challenge-demos asset id inside the checkpoint.
++_base_2025 = next(c for c in _CONFIGS if c.name == "pi_behavior_b1k_fast")
++_CONFIGS.append(
++    dataclasses.replace(
++        _base_2025,
++        name="pi_behavior_b1k_fast_2026",
++        model=dataclasses.replace(_base_2025.model, num_tasks=100),
++        data=dataclasses.replace(_base_2025.data, repo_id="behavior-1k/2026-challenge-demos"),
++    )
++)
++
+ if len({config.name for config in _CONFIGS}) != len(_CONFIGS):
+     raise ValueError("Config names must be unique.")
+ _CONFIGS_DICT = {config.name: config for config in _CONFIGS}

@@ -81,10 +81,9 @@ class Args:
     time_threshold_inpaint: float = 0.3
     num_steps: int = 20
     apply_eval_tricks: bool = True  # Enable correction rules and gripper variation checks
-    # 2026 additions (see README "Evaluation"): our 2026 checkpoints use 280x280 inputs and gripper recovery 90/15
-    image_size: int = 224
-    gripper_stuck_steps: int = 0
-    gripper_open_hold_steps: int = 15
+    # 2026 gripper recovery (see README "Evaluation"); our 2026 evals used 90 / 15
+    gripper_recovery_steps: int = 0
+    gripper_recovery_hold_steps: int = 15
     
     # Multi-checkpoint support for PI_BEHAVIOR models (optional)
     task_checkpoint_mapping: str | None = None  # Path to task-checkpoint mapping JSON file
@@ -155,12 +154,11 @@ def main(args: Args) -> None:
         time_threshold_inpaint=args.time_threshold_inpaint,
         num_steps=args.num_steps,
         apply_eval_tricks=args.apply_eval_tricks,
-        image_size=args.image_size,
-        gripper_stuck_steps=args.gripper_stuck_steps,
-        gripper_open_hold_steps=args.gripper_open_hold_steps,
+        gripper_recovery_steps=args.gripper_recovery_steps,
+        gripper_recovery_hold_steps=args.gripper_recovery_hold_steps,
     )
     
-    logging.info(f"Wrapper config: execute={wrapper_config.actions_to_execute}, keep={wrapper_config.actions_to_keep}, steps={wrapper_config.execute_in_n_steps}, num_steps={wrapper_config.num_steps}, image_size={wrapper_config.image_size}, gripper_recovery={wrapper_config.gripper_stuck_steps}/{wrapper_config.gripper_open_hold_steps}")
+    logging.info(f"Wrapper config: execute={wrapper_config.actions_to_execute}, keep={wrapper_config.actions_to_keep}, steps={wrapper_config.execute_in_n_steps}, num_steps={wrapper_config.num_steps}, gripper_recovery={wrapper_config.gripper_recovery_steps}/{wrapper_config.gripper_recovery_hold_steps}")
     
     if wrapper_config.apply_eval_tricks:
         logging.info("Eval tricks ENABLED - correction rules and gripper variation checks active")

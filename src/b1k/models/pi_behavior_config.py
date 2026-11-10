@@ -32,16 +32,16 @@ TASK_NUM_STAGES = (
     14, 15, 9, 15, 15, 15, 15, 15, 15, 15,  # Tasks 20-29
     11, 10, 10, 13, 5, 5, 14, 6, 8, 10,  # Tasks 30-39
     5, 15, 8, 15, 12, 11, 9, 14, 15, 15,  # Tasks 40-49
-    # --- 2026 challenge: tasks 50-99 ---
-    # Tasks 0-49 keep the 2025 values above so 2025 checkpoints stay compatible.
-    # Tasks 50-99 use floor(avg_episode_length / 900) clamped to [5, 15], computed from
-    # behavior-1k/2026-challenge-demos meta/episodes (see scripts/compute_task_num_stages.py).
-    # Total = 596 + 491 = 1087, matching the task_stage_embeddings shape in our 2026 checkpoints.
-    14, 8, 11, 14, 13, 11, 5, 5, 15, 7,  # Tasks 50-59
-    5, 12, 7, 5, 15, 13, 11, 7, 14, 5,  # Tasks 60-69
-    9, 15, 10, 15, 12, 13, 10, 5, 5, 12,  # Tasks 70-79
-    10, 10, 9, 8, 14, 13, 11, 11, 14, 5,  # Tasks 80-89
-    5, 11, 5, 5, 15, 15, 5, 15, 15, 9,  # Tasks 90-99
+    # --- 2026 challenge: tasks 50-99 (original table from our eval code, 2026-10-14) ---
+    # Tasks 0-49 keep the 2025 counts so 2025 checkpoints load unchanged. Tasks 50-89, 92 and 94-99 have 10 stages,
+    # task 93 has 5, and tasks 90 + 91 share 16 rows (5 + 11). Total 596 + 491 = 1087 = the task_stage_embeddings rows
+    # of our 2026 checkpoints. NOTE: any other per-task split that also sums to 1087 (e.g. counts recomputed from demo
+    # lengths) loads without error but reads the wrong rows; evals before 2026-10-14 had exactly this bug ("stagefix").
+    10, 10, 10, 10, 10, 10, 10, 10, 10, 10,  # Tasks 50-59
+    10, 10, 10, 10, 10, 10, 10, 10, 10, 10,  # Tasks 60-69
+    10, 10, 10, 10, 10, 10, 10, 10, 10, 10,  # Tasks 70-79
+    10, 10, 10, 10, 10, 10, 10, 10, 10, 10,  # Tasks 80-89
+    5, 11, 10, 5, 10, 10, 10, 10, 10, 10,  # Tasks 90-99
 )
 
 MAX_NUM_STAGES = 15  # Maximum stages per task

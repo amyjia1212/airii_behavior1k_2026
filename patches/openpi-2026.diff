@@ -1,0 +1,27 @@
+diff --git a/src/openpi/models/model.py b/src/openpi/models/model.py
+index 29618b4..8c02714 100644
+--- a/src/openpi/models/model.py
++++ b/src/openpi/models/model.py
+@@ -44,7 +44,8 @@ IMAGE_KEYS = (
+ 
+ 
+ # This may need change if we release a small model.
+-IMAGE_RESOLUTION = (224, 224)
++# 280x280: the 2026 b1k checkpoint's SigLIP pos_embedding has 400 (=20x20) patches.
++IMAGE_RESOLUTION = (280, 280)
+ 
+ 
+ # Data format
+diff --git a/src/openpi/policies/b1k_policy.py b/src/openpi/policies/b1k_policy.py
+index 73c97c8..607544c 100644
+--- a/src/openpi/policies/b1k_policy.py
++++ b/src/openpi/policies/b1k_policy.py
+@@ -5,7 +5,7 @@ import numpy as np
+ 
+ from openpi import transforms
+ from openpi.models import model as _model
+-from omnigibson.learning.utils.eval_utils import PROPRIOCEPTION_INDICES
++from b1k.shared.eval_2026_compat import PROPRIOCEPTION_INDICES  # 2026 evaluator layout (was omnigibson.learning)
+ 
+ 
+ def make_b1k_example() -> dict:

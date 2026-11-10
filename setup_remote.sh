@@ -53,6 +53,9 @@ echo "Installing B1K solution package and all dependencies (including OpenPI)...
 echo "This creates a lock file and ensures consistent installations."
 uv sync --extra dev
 
+# 2026: our changes to the openpi submodule (280x280 IMAGE_RESOLUTION, 2026 proprioception import)
+git -C openpi apply --check ../patches/openpi-2026.diff 2>/dev/null && git -C openpi apply ../patches/openpi-2026.diff || true
+
 # Initialize BEHAVIOR-1K submodule
 if [ ! -d "BEHAVIOR-1K" ]; then
   echo "Initializing BEHAVIOR-1K submodule..."

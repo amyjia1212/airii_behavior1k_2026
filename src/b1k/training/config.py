@@ -404,7 +404,20 @@ _CONFIGS = [
     ),
 ]
 
-# 2026 challenge configs (reconstructed from our W&B run configs), see configs_2026.py
+# 2026 eval config (from our original eval code, 2026-10-14): the 2025 model with 100 task embeddings and the
+# norm stats / FAST tokenizer stored under the behavior-1k/2026-challenge-demos asset id inside the checkpoint.
+# The original set openpi's global IMAGE_RESOLUTION to 280 (patches/openpi-2026.diff); here it is a model field.
+_base_2025 = next(c for c in _CONFIGS if c.name == "pi_behavior_b1k_fast")
+_CONFIGS.append(
+    dataclasses.replace(
+        _base_2025,
+        name="pi_behavior_b1k_fast_2026",
+        model=dataclasses.replace(_base_2025.model, num_tasks=100, image_resolution=(280, 280)),
+        data=dataclasses.replace(_base_2025.data, repo_id="behavior-1k/2026-challenge-demos"),
+    )
+)
+
+# 2026 challenge training configs (reconstructed from our W&B run configs), see configs_2026.py
 from b1k.training.configs_2026 import make_2026_configs  # noqa: E402
 
 _CONFIGS.extend(make_2026_configs(TrainConfig, LeRobotB1KDataConfig, DataConfig))

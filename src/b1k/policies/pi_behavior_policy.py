@@ -45,46 +45,7 @@ class PiBehaviorPolicy(Policy):
             sample_kwargs["noise"] = noise
             
         if initial_actions is not None:
-            # Create training-format observation batch for proper transform processing
-            training_obs = {}
-            
-            # Map evaluation keys to training keys if needed
-            if "observation/state" in obs:
-                training_obs["observation/state"] = obs["observation/state"]
-            elif "state" in obs:
-                training_obs["observation/state"] = obs["state"]
-            
-            if "observation/egocentric_camera" in obs:
-                training_obs["observation/egocentric_camera"] = obs["observation/egocentric_camera"]
-            elif "image" in obs and "base_0_rgb" in obs["image"]:
-                training_obs["observation/egocentric_camera"] = obs["image"]["base_0_rgb"]
-                
-            if "observation/wrist_image_left" in obs:
-                training_obs["observation/wrist_image_left"] = obs["observation/wrist_image_left"]
-            elif "image" in obs and "left_wrist_0_rgb" in obs["image"]:
-                training_obs["observation/wrist_image_left"] = obs["image"]["left_wrist_0_rgb"]
-                
-            if "observation/wrist_image_right" in obs:
-                training_obs["observation/wrist_image_right"] = obs["observation/wrist_image_right"]
-            elif "image" in obs and "right_wrist_0_rgb" in obs["image"]:
-                training_obs["observation/wrist_image_right"] = obs["image"]["right_wrist_0_rgb"]
-                
-            # Copy any other keys that might be needed (tokenized_prompt, subtask_state, etc.)
-            for key in obs:
-                if key not in training_obs and key not in ["image", "state"]:
-                    training_obs[key] = obs[key]
-            
-            initial_batch = {
-                **training_obs,  # Include all observation data in training format
-                "actions": initial_actions  # Add initial_actions as the actions field
-            }
-            
-            # Apply the full input transform pipeline (delta transforms + normalization)
-            transformed_batch = self._input_transform(initial_batch)
-            normalized_initial_actions = transformed_batch["actions"]
-            
-            # Convert to JAX and add batch dim
-            initial_actions = jnp.asarray(normalized_initial_actions)
+            initial_actions = jnp.asarray(self._transform_initial_actions(obs, initial_actions))
             if initial_actions.ndim == 2:
                 initial_actions = initial_actions[None, ...]
             sample_kwargs["initial_actions"] = initial_actions
@@ -119,6 +80,85 @@ class PiBehaviorPolicy(Policy):
             "infer_ms": model_time * 1000,
         }
         return outputs
+
+    def _transform_initial_actions(self, obs: dict, initial_actions: np.ndarray) -> np.ndarray:
+        """Normalize raw inpainting actions with the same input transforms (delta + normalization) as training."""
+        # Create training-format observation batch for proper transform processing
+        training_obs = {}
+
+        # Map evaluation keys to training keys if needed
+        if "observation/state" in obs:
+            training_obs["observation/state"] = obs["observation/state"]
+        elif "state" in obs:
+            training_obs["observation/state"] = obs["state"]
+
+        if "observation/egocentric_camera" in obs:
+            training_obs["observation/egocentric_camera"] = obs["observation/egocentric_camera"]
+        elif "image" in obs and "base_0_rgb" in obs["image"]:
+            training_obs["observation/egocentric_camera"] = obs["image"]["base_0_rgb"]
+
+        if "observation/wrist_image_left" in obs:
+            training_obs["observation/wrist_image_left"] = obs["observation/wrist_image_left"]
+        elif "image" in obs and "left_wrist_0_rgb" in obs["image"]:
+            training_obs["observation/wrist_image_left"] = obs["image"]["left_wrist_0_rgb"]
+
+        if "observation/wrist_image_right" in obs:
+            training_obs["observation/wrist_image_right"] = obs["observation/wrist_image_right"]
+        elif "image" in obs and "right_wrist_0_rgb" in obs["image"]:
+            training_obs["observation/wrist_image_right"] = obs["image"]["right_wrist_0_rgb"]
+
+        # Copy any other keys that might be needed (tokenized_prompt, subtask_state, etc.)
+        for key in obs:
+            if key not in training_obs and key not in ["image", "state"]:
+                training_obs[key] = obs[key]
+
+        initial_batch = {
+            **training_obs,  # Include all observation data in training format
+            "actions": initial_actions  # Add initial_actions as the actions field
+        }
+
+        # Apply the full input transform pipeline (delta transforms + normalization)
+        return self._input_transform(initial_batch)["actions"]
+
+    def infer_batch(
+        self, obs_list: list[dict], initial_actions_list: list[np.ndarray] | None = None, pad_to: int = 0
+    ) -> list[dict]:
+        """Batched version of infer(): one model call for several independent observations.
+
+        Per-sample transforms are identical to infer(); only the model forward pass is batched.
+        initial_actions_list must be all-None or all-arrays. The batch is padded to `pad_to` by repeating the last
+        observation (outputs discarded) so the jitted sampler only ever sees a few distinct shapes.
+        """
+        n = len(obs_list)
+        if pad_to > n:
+            obs_list = list(obs_list) + [obs_list[-1]] * (pad_to - n)
+            if initial_actions_list is not None:
+                initial_actions_list = list(initial_actions_list) + [initial_actions_list[-1]] * (pad_to - n)
+        inputs_list = [self._input_transform(jax.tree.map(lambda x: x, obs)) for obs in obs_list]
+        inputs = jax.tree.map(lambda *xs: jnp.stack([jnp.asarray(x) for x in xs]), *inputs_list)
+        self._rng, sample_rng = jax.random.split(self._rng)
+
+        sample_kwargs = dict(self._sample_kwargs)
+        if initial_actions_list is not None:
+            sample_kwargs["initial_actions"] = jnp.stack(
+                [jnp.asarray(self._transform_initial_actions(obs, ia)) for obs, ia in zip(obs_list, initial_actions_list)]
+            )
+
+        observation = Observation.from_dict(inputs)
+        start_time = time.monotonic()
+        actions, subtask_logits = self._sample_actions(sample_rng, observation, **sample_kwargs)
+        actions, subtask_logits, states = np.asarray(actions), np.asarray(subtask_logits), np.asarray(inputs["state"])
+        model_time = time.monotonic() - start_time
+
+        results = []
+        for i in range(n):
+            outputs = self._output_transform(
+                {"state": states[i], "actions": actions[i], "subtask_logits": subtask_logits[i]}
+            )
+            outputs["predicted_stage"] = int(np.argmax(outputs["subtask_logits"]))
+            outputs["policy_timing"] = {"infer_ms": model_time * 1000}
+            results.append(outputs)
+        return results
 
     @property
     def metadata(self) -> dict[str, Any]:

@@ -34,6 +34,7 @@ def create_trained_policy(
     default_prompt: str | None = None,
     norm_stats: dict[str, transforms.NormStats] | None = None,
     pytorch_device: str | None = None,
+    params: Any | None = None,
 ) -> _policy.Policy:
     """Create a policy from a trained checkpoint - EXACT COPY from openpi with b1k imports."""
     repack_transforms = repack_transforms or transforms.Group()
@@ -46,7 +47,10 @@ def create_trained_policy(
         raise NotImplementedError("PyTorch inference not supported in b1k")
     
     # JAX model loading - load directly as bfloat16 to save memory (12GB vs 24GB)
-    model = train_config.model.load(_model.restore_params(checkpoint_dir / "params", dtype=jnp.bfloat16))
+    # `params` lets callers pass weights restored earlier (e.g. kept in host memory to switch checkpoints quickly).
+    if params is None:
+        params = _model.restore_params(checkpoint_dir / "params", dtype=jnp.bfloat16)
+    model = train_config.model.load(params)
     
     # Get data config
     data_config = train_config.data.create(train_config.assets_dirs, train_config.model)

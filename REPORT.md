@@ -18,7 +18,8 @@ small compute budget (single A100-80GB GPUs per run; 2-GPU FSDP for the last fin
 2. **Curriculum by task groups.** We first trained a 5-task model for 100k steps, then five 3–5-task "chunk" models for 50k steps
    each, then short single-task fine-tunes for tasks where the chunk models were weak.
 3. **Inference** kept the 2025 tricks (rolling inpainting, action compression, stage voting), with a faster control loop (replan
-   every 10 env steps). We added a **gripper-recovery** rule: a gripper that has stayed closed on nothing for 90 steps is reopened.
+   every 10 env steps). We added a **gripper-recovery** rule: a gripper that has been stuck (fully closed, or blocked while
+   commanded open) for 90 steps is forced open for 15 steps.
 
 On the public instances 0–9, the 20 self-evaluated tasks reach a mean **Q-score of 0.105** (0 full successes). The best tasks are
 `laying_tile_floors` (0.425), `putting_dirty_dishes_in_sink` (0.275; 0.625 and 0.400 in repeat runs), `thawing_frozen_food` (0.267),
@@ -49,8 +50,12 @@ actions from the shared parquet, and decodes frames with PyAV at `from_timestamp
 an independent sequential decode. The state is the 61-D proprioception vector; as in 2025, we extract base velocity, trunk and arm
 joint positions and normalised gripper widths (23-D).
 
-**100 tasks.** Tasks 0–49 are the 2025 tasks, so we kept their stage counts. That lets 2025 checkpoints load unchanged. For tasks
-50–99 we set `floor(mean episode length / 900)` clamped to [5, 15], which adds 491 stage embeddings (1087 in total).
+**100 tasks.** Tasks 0–49 are the 2025 tasks, so we kept their stage counts. That lets 2025 checkpoints load unchanged. The new
+tasks 50–99 get 10 stages each, except tasks 90 (5), 91 (11) and 93 (5). That adds 491 stage embeddings (1087 in total).
+The stage table must match the checkpoint exactly. A different per-task split with the same total of 1087 still loads without an
+error, but every task from the first difference on reads another task's rows. Our early evaluations had exactly this bug: they
+used counts recomputed from demo lengths. We found and fixed it on 2026-10-14 ("stagefix"), and only the corrected evaluations
+are reported here.
 
 **Resolution.** All 2026 models use 280×280 inputs, up from 224. Because SigLIP patches are 14 px, this changes the token grid from
 16×16 to 20×20. We bicubically interpolate the pretrained position embedding.
@@ -75,11 +80,11 @@ All runs use batch 16, AdamW (β = 0.9/0.95, weight decay 1e-10, gradient clip 1
 
 \* The stage-1 model was trained by us, but its W&B logs were deleted to free space, so its LR schedule and hardware are not recorded (see README, "Reconstruction notes").
 
-Choosing the init was the first issue we ran into. Single-task models fine-tuned directly from the 2025 checkpoint (stage 3a/3b)
-scored 0 on 7 of their 8 tasks at every evaluated step (for example `freeze_fruit` at 2k–10k steps and `tidying_living_room` at
-6k steps). Only `sorting_bottles_cans_and_paper` (task 52) reached 0.025–0.075.
-The stage-2 chunk models, initialised from a model that had already been trained on 2026 tasks at 280 px, did much better on the
-same tasks. So in the final routing, most tasks use chunk models. Single-task fine-tunes were kept only where they matched or beat
+Choosing the init was the first issue we ran into. In the corrected (stagefix) evaluations, the single-task models fine-tuned
+directly from the 2025 checkpoint (stage 3a/3b) scored 0 on 7 of their 8 tasks: 50, 53, 65, 66, 71, 72 and 74. Only
+`sorting_bottles_cans_and_paper` (task 52) reached 0.05–0.075. The stage-2 chunk models, initialised from a model that had already
+been trained on 2026 tasks at 280 px, scored higher on 5 of those 7 tasks (for example 0.220 vs 0 on task 66) and tied on the
+other two. So in the final routing, most tasks use chunk models. Single-task fine-tunes were kept only where they matched or beat
 the chunk model: task 52 at step 8k (0.075 vs 0.056) and task 81 (0.083 vs 0.000).
 
 ## 5. Inference
@@ -91,8 +96,9 @@ for every evaluation:
 * 20 flow-matching steps; 30-action chunks, of which **13 are executed in 10 env steps** (1.3× speed-up, cubic interpolation, base
   velocities scaled) and **4 are kept** to inpaint the next chunk. Compression is switched off when the gripper commands vary a lot.
 * Stage tracking by majority vote over the last 3 predictions, plus the 2025 correction rules.
-* **Gripper recovery (new):** if a gripper is commanded closed while its fingers have been fully closed for 90 consecutive steps,
-  meaning it is closed on nothing, it is held open for 15 steps so the policy can grasp again.
+* **Gripper recovery (new):** a gripper counts as stuck if its fingers are fully closed (closed on nothing), or if it is commanded
+  at least 0.3 (normalised) wider than it is but has not moved. After 90 stuck env steps it is forced open for 15 steps, and the
+  next chunk is not inpainted from the old plan, so the policy can grasp again.
 
 ## 6. Results
 

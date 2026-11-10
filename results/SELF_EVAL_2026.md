@@ -39,4 +39,6 @@ Run-to-run variance is large: re-running `putting_dirty_dishes_in_sink` (task 85
 Q = 0.625 / 0.400 / 0.275 (runs `...-stagefix-control`, `...-stagefix-control-pod2`, `...-stagefix`), so differences of a few hundredths between
 checkpoints are within noise.
 
-Raw per-run summaries for every eval we ran: [`selfeval_runs_2026.json`](selfeval_runs_2026.json).
+Raw per-run summaries for every eval we ran: [`selfeval_runs_2026.json`](selfeval_runs_2026.json). **Only runs whose name ends in
+`-stagefix` (or `-stagefix-*`) are valid.** Earlier runs (W&B project `b1k-eval` before 2026-10-14) used a wrong per-task stage
+table and read task-stage embeddings from the wrong rows. All numbers in the table above come from stagefix runs.

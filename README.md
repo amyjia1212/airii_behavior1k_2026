@@ -14,13 +14,13 @@ The model is **PI_BEHAVIOR**, the π0.5-based policy from the [1st-place 2025 so
 >
 > * **Base code:** the public 2025 solution at commit [`ca556f7`](https://github.com/IliaLarchenko/behavior-1k-solution/commit/ca556f74a455cef7987a2be4537b5ac85cc56dd7). The later runs logged exactly this commit; the earlier ones logged `92a031f`, a local commit that was lost.
 > * **Configs:** the exact run configs, commands, package versions and logs of every training run, from W&B. Every hyperparameter in [`configs_2026.py`](src/b1k/training/configs_2026.py) comes from there.
-> * **Code changes:** the log messages printed by our modified code, and the tensor shapes stored in our published checkpoints. Together these show what each 2026 change did.
+> * **Original eval code:** on 2026-10-14 we had backed up the policy-server and eval code to the Hugging Face repo [`amyjia1212/b1k-2026-eval-code`](https://huggingface.co/amyjia1212/b1k-2026-eval-code). Everything on the **evaluation side is our original code, used verbatim**: the stage table, the eval wrapper with gripper recovery, the 2026 policy server, the openpi patch and the eval harness. The raw diff is in [`patches/original-eval-pod-2026-10-14.diff`](patches/original-eval-pod-2026-10-14.diff).
+> * **Training-side code changes:** these were not in the backup. We re-implemented them from the log messages printed by our modified code and the tensor shapes stored in our published checkpoints.
 >
-> The 2026 changes were therefore **re-implemented**, not copied. What has been verified:
+> What has been verified for the re-implemented training code:
 >
 > * the new LeRobot v3 reader returns exactly the stored states, actions and video frames of the 2026 dataset;
-> * the checkpoint-resizing code produces the exact shapes in our checkpoints (100 tasks, 1087 stage embeddings, 280px);
-> * all 2026 stage counts match the checkpoint shapes.
+> * the checkpoint-resizing code produces the exact shapes in our checkpoints (100 tasks, 1087 stage embeddings, 280px).
 >
 > **Full end-to-end training and evaluation with this exact code has not been re-run yet.** The original simulator evaluations of the published checkpoints were done with our original code and are logged in W&B. The details are in [Reconstruction notes](#reconstruction-notes).
 
@@ -37,12 +37,12 @@ Our team trained models for 95 of the 100 tasks. Each task was routed to a check
 
 | Area | Change | Files |
 |---|---|---|
-| Tasks | 50 → **100 tasks**. 2025 stage counts kept for tasks 0–49; tasks 50–99 use `floor(mean episode length / 900)` clamped to [5, 15], giving 1087 task-stage embeddings | `models/pi_behavior_config.py`, `transforms.py`, `scripts/compute_task_num_stages.py` |
+| Tasks | 50 → **100 tasks**. 2025 stage counts kept for tasks 0–49; 10 stages for tasks 50–89, 92 and 94–99, 5 for task 93, and 5 + 11 for tasks 90 + 91, giving 1087 task-stage embeddings | `models/pi_behavior_config.py`, `transforms.py` |
 | Images | **280×280** inputs (configurable `image_resolution`; SigLIP 20×20 patches instead of 16×16) | `models/pi_behavior_config.py`, `models/pi_behavior.py`, `training/config.py` |
 | Init from 2025 checkpoints | Task and stage embedding tables are extended (new rows = mean of existing rows), and the SigLIP position embedding is interpolated bicubically from 16×16 to 20×20 | `training/weight_loaders.py` |
 | Data | Standalone **LeRobot v3** reader for `behavior-1k/2026-challenge-demos` (shared parquet/mp4 files, HEVC video via PyAV) with task selection. The norm-stats and FAST-tokenizer scripts read v3 episodes too | `training/lerobot_v3.py`, `training/data_loader.py`, `scripts/compute_norm_stats.py`, `scripts/train_fast_tokenizer.py` |
 | Training infra | Checkpoints are uploaded to Hugging Face every N steps (pods were ephemeral); W&B entity and run names; bf16 Adam first moment (`mu_dtype`); `max_to_keep`; data workers restarted after each checkpoint | `scripts/train.py`, `training/config.py`, `training/checkpoints.py`, `training/configs_2026.py` |
-| Eval | BEHAVIOR-1K v3.9.3 import paths; 280px resize; **gripper recovery** (a gripper closed on nothing for 90 steps is reopened for 15 steps); checkpoint switching for tasks 0–99; full-resolution RGB eval wrapper | `shared/eval_b1k_wrapper.py`, `scripts/serve_b1k.py`, `policies/checkpoint_switcher.py`, `eval/` |
+| Eval (original code) | Batched 2026 policy server with per-env state and in-memory checkpoint switching; 280px resize; vendored 2026 proprioception indices; **gripper recovery** (a gripper that stays fully closed, or is blocked while commanded open, for 90 steps is forced open for 15); full-resolution RGB eval wrapper and eval harness | `scripts/serve_b1k_2026.py`, `shared/eval_b1k_wrapper.py`, `shared/eval_2026_compat.py`, `policies/`, `patches/openpi-2026.diff`, `eval/harness/` |
 | Configs | All 2026 training configs (19 recovered from W&B and 1 partly assumed, see notes) | `training/configs_2026.py` |
 
 The model architecture and losses are unchanged from 2025: task and stage conditioning, FAST auxiliary loss, KV transform, correlated noise, per-timestep normalisation, and the inference-time inpainting and compression. See [docs/README_2025.md](docs/README_2025.md) and the [2025 write-up](https://github.com/IliaLarchenko/behavior-1k-solution).
@@ -84,22 +84,26 @@ Each checkpoint folder has `params/` (Orbax) and `assets/behavior-1k/2026-challe
 
 ## Evaluation
 
-**1. Start the policy server.** It switches checkpoints by the `task_id` the evaluator sends. These are the settings we used for all 2026 evaluations:
+**1. Start the policy server.** This is the exact command we used, with `scripts/serve_b1k_2026.py` (one server per GPU; the example serves the task-52 model):
 
 ```bash
-uv run scripts/serve_b1k.py \
-  --task-checkpoint-mapping task_checkpoint_mapping_2026.json \
-  --image-size 280 \
-  --actions-to-execute 13 --actions-to-keep 4 --execute-in-n-steps 10 \
-  --num-steps 20 \
-  --gripper-stuck-steps 90 --gripper-open-hold-steps 15 \
-  --port 8000 \
-  policy:checkpoint \
-  --policy.config pi_behavior_b1k_2026_c1 \
-  --policy.dir ~/models/b1k-2026-t50-70-72-85/step_049999
+XLA_PYTHON_CLIENT_MEM_FRACTION=0.35 XLA_PYTHON_CLIENT_ALLOCATOR=platform \
+uv run scripts/serve_b1k_2026.py \
+  --checkpoint-dir ~/models/b1k-2026-t52 --checkpoints step_008000 --port 8000 \
+  --actions-to-execute 13 --execute-in-n-steps 10 \
+  --gripper-recovery-steps 90 --gripper-recovery-hold-steps 15
 ```
 
-(`--policy.config` only defines the architecture, which is identical for all 2026 checkpoints. `--policy.dir` is the checkpoint loaded at start-up.)
+`--checkpoints` accepts several step directories. The server keeps all of them in host memory and switches on `GET /switch?ckpt=<name>`. Run `uv run scripts/serve_b1k_2026.py --help` for all options. Our setup notes, including how images are resized and the stage table, are in [`eval/EVAL_NOTES_2026-10-14.md`](eval/EVAL_NOTES_2026-10-14.md).
+
+To serve all 25 tasks from one server, routing by the `task_id` the evaluator sends, use the 2025-style server with the mapping file:
+
+```bash
+uv run scripts/serve_b1k.py --task-checkpoint-mapping task_checkpoint_mapping_2026.json \
+  --actions-to-execute 13 --actions-to-keep 4 --execute-in-n-steps 10 --num-steps 20 \
+  --gripper-recovery-steps 90 --gripper-recovery-hold-steps 15 --port 8000 \
+  policy:checkpoint --policy.config pi_behavior_b1k_fast_2026 --policy.dir ~/models/b1k-2026-t50-70-72-85/step_049999
+```
 
 **2. Run the BEHAVIOR-1K evaluator** in the `behavior` env, from the BEHAVIOR-1K v3.9.3 checkout:
 
@@ -109,11 +113,11 @@ python -m omnigibson.eval.eval \
   --host 127.0.0.1 --port 8000 \
   --instance-indices 0 1 2 3 4 5 6 7 8 9 --num-rollouts 1 \
   --robot-config /path/to/airii_behavior1k_2026/eval/r1pro.yaml \
-  --env-wrapper rgb_full_res_wrapper.RGBFullResWrapper \
+  --env-wrapper b1k_eval_wrappers.RGBFullResWrapper \
   --output-dir eval_logs/putting_dirty_dishes_in_sink --write-video
 ```
 
-Put `eval/` on `PYTHONPATH` so the evaluator can import `rgb_full_res_wrapper`. Our self-evaluation used `RGBFullResWrapper`: head camera 720×720 and wrists 480×480, RGB only, resized to 280 by the server. `eval/default_wrapper.py` is the official low-resolution (224×224) wrapper that was included in our submission package. `eval/r1pro.yaml` is the robot config we submitted.
+Put `eval/harness/` on `PYTHONPATH` so the evaluator can import `b1k_eval_wrappers`. Our self-evaluation used `RGBFullResWrapper`: head camera 720×720 and wrists 480×480, RGB only, resized to 280 by the server. Our full eval harness is in [`eval/harness/`](eval/harness/): `run_all.py` and `rerun_stagefix.py` orchestrate the runs, `eval_multi_ckpt.py` is the evaluator client, and `log_wandb.py` does the W&B logging. Its paths are those of our RunPod pod. `eval/default_wrapper.py` is the official low-resolution (224×224) wrapper that was included in our submission package. `eval/r1pro.yaml` is the robot config we submitted.
 
 ## Training
 
@@ -234,14 +238,13 @@ Two caveats as of 2026-11-09: the task-37 repo below returns 404 (it is private 
 |---|---|---|
 | Hyperparameters, task splits, init checkpoints, step counts, GPUs | W&B run configs and commands (19 runs) | **exact** |
 | Stage-1 5-task model config (`t5_base`) | Trained by us; its W&B logs were deleted to free space. Tasks, steps (100k), save interval (1k) and the init (`behavior_50t_checkpoint`) are known from the HF repo and our notes; the LR schedule is **assumed** equal to stage 2 | partly assumed |
-| `TASK_NUM_STAGES` for tasks 50–99 | Recomputed from dataset metadata; total of 1087 checked against checkpoint tensor shapes | verified |
+| `TASK_NUM_STAGES` for tasks 50–99 | Original eval code; total of 1087 checked against checkpoint tensor shapes | **original** |
 | Embedding extension and position-embedding interpolation | Re-implemented from the training log messages; output shapes checked against checkpoints | re-implemented, unit-tested |
 | LeRobot v3 reader | Re-implemented; states, actions and frames checked bit-exact against the raw 2026 dataset | re-implemented, tested |
 | HF upload, W&B naming, data-worker restarts | Re-implemented from log messages | re-implemented |
-| Eval settings (13/4/10, 20 flow steps, 280px, gripper 90/15) | Logged in each W&B eval run's config | **exact settings** |
-| Gripper-recovery trigger condition | Only "after 90 stuck steps, hold open 15" was logged; the "closed on nothing" trigger is our reconstruction | approximate |
-| "stagefix" | Our eval runs before and after a fix to stage handling for tasks ≥ 50. The 100-entry `TASK_NUM_STAGES` in this repo covers it | re-implemented |
-| Our eval-side W&B logging script (`log_wandb.py`) | Lost; not needed to run evaluation | not included |
+| Eval code: policy server, wrapper and gripper recovery, policies, openpi patch, harness | HF backup `amyjia1212/b1k-2026-eval-code` (2026-10-14) | **original** |
+| Eval settings (13/4/10, 20 flow steps, 280px, gripper 90/15) | Logged in each W&B eval run's config, and in the original code | **original** |
+| "stagefix" | Evals before 2026-10-14 used a different per-task stage split that also summed to 1087, so stages were read from the wrong rows. Only `-stagefix` evals are valid, and only those are reported | **original** |
 
 ## Acknowledgements and license
 
