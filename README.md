@@ -198,7 +198,7 @@ Two caveats as of 2026-11-09: the task-37 repo below returns 404 (it is private 
 | 33, 36, 39 | [fei777/b1k2026-pi05-ft-tasks-33-36-39 @1441005](https://huggingface.co/fei777/b1k2026-pi05-ft-tasks-33-36-39/tree/1441005be9eb1825c1c5e95ec14d61b9e7a1e894) | |
 | 34 | [Rena-Tian/b1k-2026-task34-ft1](https://huggingface.co/Rena-Tian/b1k-2026-task34-ft1) | |
 | 35, 63 | [shi2bis/joint_35_63_78](https://huggingface.co/shi2bis/joint_35_63_78) | |
-| 37 | [jermo1120/b1k-task37-clean-a-trumpet-25k](https://huggingface.co/jermo1120/b1k-task37-clean-a-trumpet-25k) | |
+| 37 | [jermo1120/b1k-task37-clean-a-trumpet-25k / step_24000](https://huggingface.co/jermo1120/b1k-task37-clean-a-trumpet-25k/tree/main/step_24000) | |
 | 38 | [jermo1120/pi05-b1k-task38-spraying-for-bugs-25k](https://huggingface.co/jermo1120/pi05-b1k-task38-spraying-for-bugs-25k) | |
 | 40 | [RichardCTian/b1k-2026-task40-ft1](https://huggingface.co/RichardCTian/b1k-2026-task40-ft1) | |
 | 42 | [Rena-Tian/b1k-2026-task42-ft1](https://huggingface.co/Rena-Tian/b1k-2026-task42-ft1) | |

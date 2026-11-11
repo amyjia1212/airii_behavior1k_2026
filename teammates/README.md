@@ -22,7 +22,7 @@ where it is published.
 | Blakesss | 22 | PIB | 2025 ckpt | archived in the HF repo ([`archives/current_policy.tar.zst`, patches, `RESTORE_OFFICIAL.md`](https://huggingface.co/Blakesss/task22-pi05-backup/tree/task22-official-final-backup-20261004-075738-UTC)) | 0.58 (2/10 successes) |
 | jermo1120 | 38 | PIB (`pi_behavior_b1k_fast`, single task, 25k steps, LR 5e-6 → 5e-7; step 24999 submitted) | ckpt3 | [`jermo1120/task38/`](jermo1120/task38/) patches + 2026 serving adapter (from the [model card](https://huggingface.co/jermo1120/pi05-b1k-task38-spraying-for-bugs-25k)). **Complete** | 0.20 |
 | jermo1120 | 55 | π0.5 (openpi, full fine-tune from pi05_base) | pi05_base | [`jermo1120/`](jermo1120/) patches (from the HF model repo) | 0.067 |
-| jermo1120 | 37 | PIB (`pi_behavior_b1k_task37_clean_a_trumpet`, single task, 25k steps, LR 5e-6 → 5e-7) | ckpt3 | [`jermo1120/task37/`](jermo1120/task37/) patches + launch script (from the [model card](https://huggingface.co/jermo1120/b1k-task37-clean-a-trumpet-25k)). **Mostly complete**: which step was submitted (the card recommends `step_24000`) and its score are not stated | ? |
+| jermo1120 | 37 | PIB (`pi_behavior_b1k_task37_clean_a_trumpet`, single task, 25k steps, LR 5e-6 → 5e-7; `step_24000` submitted) | ckpt3 | [`jermo1120/task37/`](jermo1120/task37/) patches + launch script (from the [model card](https://huggingface.co/jermo1120/b1k-task37-clean-a-trumpet-25k)). **Complete** | 0.00 (the task's only goal gives no partial credit) |
 | angegiga | 83 | π0.5 (openpi, `wensi-ai/openpi` behavior branch + patches) | pi05_base | in the HF repo ([`openpi_patches/`, `rebuild.sh`, `SUBMISSION.md`](https://huggingface.co/angegiga/pi05-store-honey)) | 3/10 successes |
 | estjtmi | 5, 27, 31 | PIB, 50 slots | ? | **missing** (no model card) | ? |
 | Luke-Xing | 57 | PIB in 2025 slot 36 (shapes unchanged), 3 stages: LoRA 12k → LoRA 8k → + action expert 7.5k, batch 32, 1× RTX 5090 | ckpt3 | recipe, LRs and exact commands in the [model card](https://huggingface.co/Luke-Xing/task57b1k); **code missing**: the configs, `serve_b1k_2026.py` (slot mapping, torso cap) and data loader are not published | 0.10 (1/10; a repeat run scored 0/10) |
@@ -50,7 +50,5 @@ Tasks 13, 41, 49, 58 and 68 had no trained model.
 2. estjtmi (tasks 5, 27, 31): code, configs, and ideally a model card.
    Luke-Xing (57): the model card is done; still needed is the code it describes (`src/`, `scripts/` with the three
    `pi_behavior_sweep_*` configs and `serve_b1k_2026.py`), e.g. the `policy_code/` folder from the submission zip.
-3. jermo1120: say which task-37 step was submitted and its score (the model card still says the checkpoints are not
-   evaluated).
-4. Scarlett: push the code used for the `joint_*` checkpoints, and say which sub-checkpoint of each `joint_*` repo was submitted
+3. Scarlett: push the code used for the `joint_*` checkpoints, and say which sub-checkpoint of each `joint_*` repo was submitted
    (the repos hold several, e.g. `joint_35_63_78_noise_step22500` and `joint_35_63_78_pickup_step27500`).
