@@ -25,7 +25,7 @@ where it is published.
 | jermo1120 | 37 | ? | ? | **checkpoint repo not found** (`jermo1120/b1k-task37-clean-a-trumpet-25k` is 404) | ? |
 | angegiga | 83 | π0.5 (openpi, `wensi-ai/openpi` behavior branch + patches) | pi05_base | in the HF repo ([`openpi_patches/`, `rebuild.sh`, `SUBMISSION.md`](https://huggingface.co/angegiga/pi05-store-honey)) | 3/10 successes |
 | estjtmi | 5, 27, 31 | PIB, 50 slots | ? | **missing** (no model card) | ? |
-| Luke-Xing | 57 | PIB + LoRA | ? | **missing** (no model card) | ? |
+| Luke-Xing | 57 | PIB in 2025 slot 36 (shapes unchanged), 3 stages: LoRA 12k → LoRA 8k → + action expert 7.5k, batch 32, 1× RTX 5090 | ckpt3 | recipe, LRs and exact commands in the [model card](https://huggingface.co/Luke-Xing/task57b1k); **code missing**: the configs, `serve_b1k_2026.py` (slot mapping, torso cap) and data loader are not published | 0.10 (1/10; a repeat run scored 0/10) |
 | hlhl188 | 77 | π0.5 + LoRA (`cluster_installing_devices_lora_v1`) | ? | **missing** (no model card) | ? |
 
 Tasks 13, 41, 49, 58 and 68 had no trained model.
@@ -46,7 +46,9 @@ Tasks 13, 41, 49, 58 and 68 had no trained model.
 1. RichardCTian: say which config each submitted checkpoint used for tasks 7, 11, 15, 17, 18, 24, 25, 29, 30, 32 and 64 (the
    candidates are listed in `CONFIGS_AFTER_2026-10-04.md`), plus init, steps and submitted step; and push the config for
    task 54.
-2. estjtmi (tasks 5, 27, 31), Luke-Xing (57), hlhl188 (77), jermo1120 (38): code, configs, and ideally a model card.
+2. estjtmi (tasks 5, 27, 31), hlhl188 (77), jermo1120 (38): code, configs, and ideally a model card.
+   Luke-Xing (57): the model card is done; still needed is the code it describes (`src/`, `scripts/` with the three
+   `pi_behavior_sweep_*` configs and `serve_b1k_2026.py`), e.g. the `policy_code/` folder from the submission zip.
 3. jermo1120: make the task-37 checkpoint public, or give its correct repo name.
 4. Scarlett: push the code used for the `joint_*` checkpoints, and say which sub-checkpoint of each `joint_*` repo was submitted
    (the repos hold several, e.g. `joint_35_63_78_noise_step22500` and `joint_35_63_78_pickup_step27500`).
