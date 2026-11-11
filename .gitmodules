@@ -12,3 +12,6 @@
 [submodule "teammates/rena_richard"]
 	path = teammates/rena_richard
 	url = https://github.com/Rena-Tian/b1k-2026-pipeline
+[submodule "teammates/helen_task77"]
+	path = teammates/helen_task77
+	url = https://github.com/hehe6-88/b1k-2026-task77

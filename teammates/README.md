@@ -26,7 +26,7 @@ where it is published.
 | angegiga | 83 | π0.5 (openpi, `wensi-ai/openpi` behavior branch + patches) | pi05_base | in the HF repo ([`openpi_patches/`, `rebuild.sh`, `SUBMISSION.md`](https://huggingface.co/angegiga/pi05-store-honey)) | 3/10 successes |
 | estjtmi | 5, 27, 31 | PIB, 50 slots | ? | **missing** (no model card) | ? |
 | Luke-Xing | 57 | PIB in 2025 slot 36 (shapes unchanged), 3 stages: LoRA 12k → LoRA 8k → + action expert 7.5k, batch 32, 1× RTX 5090 | ckpt3 | recipe, LRs and exact commands in the [model card](https://huggingface.co/Luke-Xing/task57b1k); **code missing**: the configs, `serve_b1k_2026.py` (slot mapping, torso cap) and data loader are not published | 0.10 (1/10; a repeat run scored 0/10) |
-| hlhl188 | 77 | π0.5 + LoRA (`cluster_installing_devices_lora_v1`) | ? | **missing** (no model card) | ? |
+| hlhl188 | 77 | π0.5 + LoRA (`cluster_installing_devices_lora_v1`; trained jointly on 77 + 89, step 20000 submitted) | ckpt2 | [`helen_task77/`](helen_task77/) submodule ([hehe6-88/b1k-2026-task77](https://github.com/hehe6-88/b1k-2026-task77)). **Complete**: training config, code, model card, per-instance results | 0.2500 |
 
 Tasks 13, 41, 49, 58 and 68 had no trained model.
 
@@ -36,6 +36,8 @@ Tasks 13, 41, 49, 58 and 68 had no trained model.
   and those two config versions are in `fei777/config_variants/`.
 - `jermo1120/` holds the patches uploaded with `jermo1120/pi05-b1k-task55-re-shelving-library-books`.
 - `scarlett/` is a git submodule pinned to `shi3bis/1k-repo-scarlett@4b2436f`.
+- `helen_task77/` is a git submodule pinned to `hehe6-88/b1k-2026-task77@042588a`: the task-77 training config, openpi π0.5 + LoRA
+  training/serving/sweep scripts, dataset converter, model card and the per-instance results behind q = 0.25.
 - `rena_richard/` is a git submodule pinned to `Rena-Tian/b1k-2026-pipeline@64de0a3`: a snapshot of the 2025 winner's
   code with their 2026 changes (LeRobot v3 loader, 1105-stage table, skill-annotation stage labels, skill oversampling,
   every per-task config through the 10/16 deadline), exact diffs against upstream, the openpi π0.5 diff for task 69,
@@ -44,7 +46,7 @@ Tasks 13, 41, 49, 58 and 68 had no trained model.
 ## Still needed (status as of 2026-11-10)
 
 1. RichardCTian: push the config (and init, steps, LR) for task 54. Everything else is done.
-2. estjtmi (tasks 5, 27, 31), hlhl188 (77), jermo1120 (38): code, configs, and ideally a model card.
+2. estjtmi (tasks 5, 27, 31), jermo1120 (38): code, configs, and ideally a model card.
    Luke-Xing (57): the model card is done; still needed is the code it describes (`src/`, `scripts/` with the three
    `pi_behavior_sweep_*` configs and `serve_b1k_2026.py`), e.g. the `policy_code/` folder from the submission zip.
 3. jermo1120: make the task-37 checkpoint public, or give its correct repo name.
