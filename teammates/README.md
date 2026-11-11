@@ -17,7 +17,7 @@ where it is published.
 | fei777 | 2, 3, 6, 19, 23, 28, 33, 36, 39, 44, 47, 48, 51, 61, 76, 82, 92 | PIB, 50 slots (new tasks borrow a 2025 slot), 224 px | ckpt1 / 50t | [`fei777/`](fei777/) (full tree + `uv.lock` + lerobot patch, from the HF model repos) | not in model cards |
 | Rena-Tian | 1, 4, 8, 9, 14, 16, 20, 21, 26, 34, 42, 43, 45, 46, 56, 78, 89, 99 | PIB (50 slots, or 100 tasks with 1105 stages) | ckpt2 / 50t | [`rena_richard/`](rena_richard/) submodule ([Rena-Tian/b1k-2026-pipeline](https://github.com/Rena-Tian/b1k-2026-pipeline)). **Complete**: every submitted task maps to a config, init, step count and LR in [`CONFIGS_AFTER_2026-10-04.md`](https://github.com/Rena-Tian/b1k-2026-pipeline/blob/main/CONFIGS_AFTER_2026-10-04.md) | 0.03–0.60 (e.g. task 45: 0.60, task 1: 0.567, task 16: 0.50) |
 | Rena-Tian | 69 | π0.5 (openpi, 3-task model for tasks 34/63/69) | pi05_base | `rena_richard/patches/openpi-pi05.wensi-ai.vs-0cc8e35.diff` (`pi05_b1k_3task_calib`, LoRA, against `wensi-ai/openpi@0cc8e35`); run details in [`CONFIGS_AFTER_2026-10-04.md`](https://github.com/Rena-Tian/b1k-2026-pipeline/blob/main/CONFIGS_AFTER_2026-10-04.md) | 0.00 |
-| RichardCTian | 7, 10, 11, 12, 15, 17, 18, 24, 25, 29, 30, 32, 40, 54, 59, 62, 64, 67 | PIB (50 slots, or 100 tasks with 1105 stages) | ckpt2 / 50t | same [`rena_richard/`](rena_richard/) submodule ([Rena-Tian/b1k-2026-pipeline](https://github.com/Rena-Tian/b1k-2026-pipeline)). **Mostly complete**: configs for all tasks except 54 are pushed; for 7, 11, 15, 17, 18, 24, 25, 29, 30, 32 and 64 there are several candidate configs each, and which one each submitted checkpoint used is not yet stated | 0.04–0.40 (e.g. task 40: 0.40, task 12: 0.367, task 30: 0.363) |
+| RichardCTian | 7, 10, 11, 12, 15, 17, 18, 24, 25, 29, 30, 32, 40, 54, 59, 62, 64, 67 | PIB (50 slots, or 100 tasks with 1105 stages) | ckpt2 / 50t | same [`rena_richard/`](rena_richard/) submodule ([Rena-Tian/b1k-2026-pipeline](https://github.com/Rena-Tian/b1k-2026-pipeline)). **Complete except task 54**: every other submitted task maps to a config, init, step count, submitted step and LR in [`CONFIGS_AFTER_2026-10-04.md`](https://github.com/Rena-Tian/b1k-2026-pipeline/blob/main/CONFIGS_AFTER_2026-10-04.md); the task-54 config is not pushed yet | 0.04–0.40 (e.g. task 40: 0.40, task 12: 0.367, task 30: 0.363) |
 | shi2bis / shi3bis (Scarlett) | 0, 35, 60, 63, 80, 87 | PIB, 100 tasks, 627–673 stages, 224 px | 50t | [`scarlett/`](scarlett/) submodule ([shi3bis/1k-repo-scarlett](https://github.com/shi3bis/1k-repo-scarlett)). **Partial**: the pushed code reserves 627 stages, but the joint checkpoints have 649 / 656 / 673 | `eval_metrics.json` in HF repos |
 | Blakesss | 22 | PIB | 2025 ckpt | archived in the HF repo ([`archives/current_policy.tar.zst`, patches, `RESTORE_OFFICIAL.md`](https://huggingface.co/Blakesss/task22-pi05-backup/tree/task22-official-final-backup-20261004-075738-UTC)) | 0.58 (2/10 successes) |
 | jermo1120 | 38 | PIB | ckpt (behavior_submission) | **missing** | 0.20 |
@@ -36,16 +36,14 @@ Tasks 13, 41, 49, 58 and 68 had no trained model.
   and those two config versions are in `fei777/config_variants/`.
 - `jermo1120/` holds the patches uploaded with `jermo1120/pi05-b1k-task55-re-shelving-library-books`.
 - `scarlett/` is a git submodule pinned to `shi3bis/1k-repo-scarlett@4b2436f`.
-- `rena_richard/` is a git submodule pinned to `Rena-Tian/b1k-2026-pipeline@0eed986`: a snapshot of the 2025 winner's
+- `rena_richard/` is a git submodule pinned to `Rena-Tian/b1k-2026-pipeline@64de0a3`: a snapshot of the 2025 winner's
   code with their 2026 changes (LeRobot v3 loader, 1105-stage table, skill-annotation stage labels, skill oversampling,
   every per-task config through the 10/16 deadline), exact diffs against upstream, the openpi π0.5 diff for task 69,
   train/eval/sweep scripts, their runbook `CLAUDE.md`, and a task → config map (`CONFIGS_AFTER_2026-10-04.md`).
 
-## Still needed (status as of 2026-11-09)
+## Still needed (status as of 2026-11-10)
 
-1. RichardCTian: say which config each submitted checkpoint used for tasks 7, 11, 15, 17, 18, 24, 25, 29, 30, 32 and 64 (the
-   candidates are listed in `CONFIGS_AFTER_2026-10-04.md`), plus init, steps and submitted step; and push the config for
-   task 54.
+1. RichardCTian: push the config (and init, steps, LR) for task 54. Everything else is done.
 2. estjtmi (tasks 5, 27, 31), hlhl188 (77), jermo1120 (38): code, configs, and ideally a model card.
    Luke-Xing (57): the model card is done; still needed is the code it describes (`src/`, `scripts/` with the three
    `pi_behavior_sweep_*` configs and `serve_b1k_2026.py`), e.g. the `policy_code/` folder from the submission zip.
