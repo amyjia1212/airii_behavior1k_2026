@@ -1,0 +1,14 @@
+diff --git a/OmniGibson/omnigibson/learning/utils/lerobot_utils.py b/OmniGibson/omnigibson/learning/utils/lerobot_utils.py
+index 95eb5e1b5..f69c6a13d 100644
+--- a/OmniGibson/omnigibson/learning/utils/lerobot_utils.py
++++ b/OmniGibson/omnigibson/learning/utils/lerobot_utils.py
+@@ -92,7 +92,8 @@ def decode_video_frames_torchvision(
+ 
+     # set the first and last requested timestamps
+     # Note: previous timestamps are usually loaded, since we need to access the previous key frame
+-    first_ts = min(timestamps) - 5  # a little backward to account for timestamp mismatch
++    # Videos were re-encoded with a keyframe every 4 frames, so a short backoff is enough (was 5s = ~150 decoded frames).
++    first_ts = min(timestamps) - 0.5  # a little backward to account for timestamp mismatch
+     last_ts = max(timestamps)
+ 
+     # access closest key frame of the first requested frame

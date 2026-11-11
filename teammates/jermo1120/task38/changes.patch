@@ -1,0 +1,158 @@
+diff --git a/src/b1k/training/config.py b/src/b1k/training/config.py
+index 52dfb7d..b5d5bca 100644
+--- a/src/b1k/training/config.py
++++ b/src/b1k/training/config.py
+@@ -92,6 +92,9 @@ class DataConfig:
+     # Episodes index to use for training 
+     episodes_index: List[int] | None = None
+ 
++    # B1K task names to train on. If None, all 50 challenge tasks are used.
++    tasks: List[str] | None = None
++
+ 
+ class GroupFactory(Protocol):
+     def __call__(self, model_config: _model.BaseModelConfig) -> _transforms.Group:
+@@ -376,6 +379,106 @@ _CONFIGS = [
+         save_interval=500,
+         keep_period=2000,
+     ),
++    TrainConfig(
++        # Fine-tune the 1st-place checkpoint_3 (tasks 4,27,31-33,35-39,41,46,49) on task 37 only.
++        name="pi_behavior_b1k_task37_clean_a_trumpet",
++        exp_name="ft_from_ckpt3_lr5e-6",
++        project_name="B1K",
++        model=pi_behavior_config.PiBehaviorConfig(
++            action_horizon=30,
++            action_dim=32,
++            use_correlated_noise=True,
++            correlation_beta=0.5,
++            use_fast_auxiliary=True,
++            fast_loss_weight=0.05,
++            fast_encoded_dims="0:6,7:23",
++            fast_vocab_size=1024,
++            max_fast_tokens=200,
++            use_kv_transform=True,
++            use_knowledge_insulation=False,
++            subtask_loss_weight=0.1,
++            freeze_vision_backbone=True,
++        ),
++        data=LeRobotB1KDataConfig(
++            repo_id="IliaLarchenko/behavior_224_rgb",
++            base_config=DataConfig(
++                prompt_from_task=False,
++                behavior_dataset_root="~/data/behavior_224_rgb",
++                use_per_timestamp_norm=True,
++                tasks=["clean_a_trumpet"],
++            ),
++            use_delta_joint_actions=True,
++            use_fast_tokenization=True,
++        ),
++        # Low LR since we start from an already task-adapted checkpoint; peak 2.5e-5 drove action_loss
++        # from ~0.10 up to ~0.19 during warmup and it never recovered.
++        lr_schedule=_optimizer.CosineDecaySchedule(
++            warmup_steps=200,
++            peak_lr=5e-6,
++            decay_steps=10_000,
++            decay_lr=5e-7,
++        ),
++        num_flow_samples=15,
++        weight_loader=weight_loaders.PiBehaviorWeightLoader("/root/models/checkpoint_3/params"),
++        num_train_steps=10_000,
++        batch_size=16,  # 32 OOMs on one A100-80GB (needs ~81GB)
++        assets_base_dir="./outputs/assets",
++        checkpoint_base_dir="./outputs/checkpoints",
++        num_workers=32,
++        save_interval=1000,
++        keep_period=None,
++        wandb_enabled=False,
++    ),
++    TrainConfig(
++        # Fine-tune the 1st-place checkpoint_3 (tasks 4,27,31-33,35-39,41,46,49) on task 38 (spraying_for_bugs) only, 25k steps.
++        name="pi_behavior_b1k_task38_spraying_for_bugs",
++        exp_name="ft_from_ckpt3_lr5e-6_25k",
++        project_name="B1K",
++        model=pi_behavior_config.PiBehaviorConfig(
++            action_horizon=30,
++            action_dim=32,
++            use_correlated_noise=True,
++            correlation_beta=0.5,
++            use_fast_auxiliary=True,
++            fast_loss_weight=0.05,
++            fast_encoded_dims="0:6,7:23",
++            fast_vocab_size=1024,
++            max_fast_tokens=200,
++            use_kv_transform=True,
++            use_knowledge_insulation=False,
++            subtask_loss_weight=0.1,
++            freeze_vision_backbone=True,
++        ),
++        data=LeRobotB1KDataConfig(
++            repo_id="IliaLarchenko/behavior_224_rgb",
++            base_config=DataConfig(
++                prompt_from_task=False,
++                behavior_dataset_root="~/data/behavior_224_rgb",
++                use_per_timestamp_norm=True,
++                tasks=["spraying_for_bugs"],
++            ),
++            use_delta_joint_actions=True,
++            use_fast_tokenization=True,
++        ),
++        # Low LR since we start from an already task-adapted checkpoint; peak 2.5e-5 drove action_loss
++        # from ~0.10 up to ~0.19 during warmup and it never recovered.
++        lr_schedule=_optimizer.CosineDecaySchedule(
++            warmup_steps=200,
++            peak_lr=5e-6,
++            decay_steps=25_000,
++            decay_lr=5e-7,
++        ),
++        num_flow_samples=15,
++        weight_loader=weight_loaders.PiBehaviorWeightLoader("/root/models/checkpoint_3/params"),
++        num_train_steps=25_000,
++        batch_size=16,  # 32 OOMs on one A100-80GB (needs ~81GB)
++        assets_base_dir="./outputs/assets",
++        checkpoint_base_dir="./outputs/checkpoints",
++        num_workers=12,
++        save_interval=2500,
++        keep_period=2500,
++        wandb_enabled=False,
++    ),
+ ]
+ 
+ if len({config.name for config in _CONFIGS}) != len(_CONFIGS):
+diff --git a/src/b1k/training/data_loader.py b/src/b1k/training/data_loader.py
+index 3dd8fb2..9e7738e 100644
+--- a/src/b1k/training/data_loader.py
++++ b/src/b1k/training/data_loader.py
+@@ -65,7 +65,7 @@ def create_behavior_dataset(data_config: _config.DataConfig, action_horizon: int
+     if seed is None:
+         seed = int(time.time() * 1000) % (2**32)
+         logging.info(f"Using random seed for BehaviorLeRobotDataset: {seed}")
+-    tasks = [
++    tasks = data_config.tasks or [
+     "picking_up_trash", # difficulty: 2
+     "putting_away_Halloween_decorations", # difficulty: 3
+     "cleaning_up_plates_and_food", # difficulty: 3.5
+diff --git a/src/b1k/training/weight_loaders.py b/src/b1k/training/weight_loaders.py
+index ed3a614..8a642bd 100644
+--- a/src/b1k/training/weight_loaders.py
++++ b/src/b1k/training/weight_loaders.py
+@@ -11,6 +11,7 @@ import flax.traverse_util
+ import numpy as np
+ import orbax.checkpoint as ocp
+ 
++import openpi.models.model as _model
+ import openpi.shared.array_typing as at
+ import openpi.shared.download as download
+ 
+@@ -40,9 +41,8 @@ class PiBehaviorWeightLoader(WeightLoader):
+         # Load checkpoint
+         params_path = download.maybe_download(self.params_path)
+         
+-        # Load directly with PyTreeCheckpointer (handles both old and new checkpoint formats)
+-        with ocp.PyTreeCheckpointer() as ckptr:
+-            restored = ckptr.restore(params_path)
++        # Newer orbax requires explicit restore shardings; restore_params supplies them.
++        restored = _model.restore_params(params_path, restore_type=np.ndarray)
+         
+         # Handle nested 'params' key (from some checkpoint formats)
+         if isinstance(restored, dict) and "params" in restored:
