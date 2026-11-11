@@ -162,14 +162,12 @@ All stages use batch 16, EMA 0.99, 15 flow samples per step, the FAST auxiliary 
 
 The full routing of our team's submission is below; ✅ marks the tasks that use checkpoints from this repository. For who trained the other checkpoints, how, and where their code is, see [`teammates/README.md`](teammates/README.md). Tasks 13, 41, 49, 58 and 68 had no trained model.
 
-Two caveats as of 2026-11-09: the task-37 repo below returns 404 (it is private or was renamed), and the `shi2bis/joint_*` repos each hold several sub-checkpoints, and which one was submitted is still being confirmed.
-
 <details>
 <summary>Task → checkpoint table (100 tasks)</summary>
 
 | Task | Checkpoint | |
 |---:|---|---|
-| 0 | [shi2bis/task0_turning_on_radio_cont5000](https://huggingface.co/shi2bis/task0_turning_on_radio_cont5000) | |
+| 0 | [shi2bis/task0_turning_on_radio_cont5000 / task0_turning_on_radio_cont5000](https://huggingface.co/shi2bis/task0_turning_on_radio_cont5000/tree/main/task0_turning_on_radio_cont5000) | |
 | 1 | [Rena-Tian/b1k-2026-task1-ft1](https://huggingface.co/Rena-Tian/b1k-2026-task1-ft1) | |
 | 2, 3, 6, 19, 28, 44, 47 | [fei777/b1k2026-pi05-ft-tasks-2-3-6-19-28-44-47 @73057b3](https://huggingface.co/fei777/b1k2026-pi05-ft-tasks-2-3-6-19-28-44-47/tree/73057b3d130c9ff6753bd39ba115b66fae9a382e) | |
 | 4 | [Rena-Tian/b1k-2026-task4-ft1](https://huggingface.co/Rena-Tian/b1k-2026-task4-ft1) | |
@@ -197,7 +195,7 @@ Two caveats as of 2026-11-09: the task-37 repo below returns 404 (it is private 
 | 32 | [RichardCTian/b1k-2026-task32-ft1](https://huggingface.co/RichardCTian/b1k-2026-task32-ft1) | |
 | 33, 36, 39 | [fei777/b1k2026-pi05-ft-tasks-33-36-39 @1441005](https://huggingface.co/fei777/b1k2026-pi05-ft-tasks-33-36-39/tree/1441005be9eb1825c1c5e95ec14d61b9e7a1e894) | |
 | 34 | [Rena-Tian/b1k-2026-task34-ft1](https://huggingface.co/Rena-Tian/b1k-2026-task34-ft1) | |
-| 35, 63 | [shi2bis/joint_35_63_78](https://huggingface.co/shi2bis/joint_35_63_78) | |
+| 35, 63 | [shi2bis/joint_35_63_78 / joint_35_63_78_pickup_step27500](https://huggingface.co/shi2bis/joint_35_63_78/tree/main/joint_35_63_78_pickup_step27500) | |
 | 37 | [jermo1120/b1k-task37-clean-a-trumpet-25k / step_24000](https://huggingface.co/jermo1120/b1k-task37-clean-a-trumpet-25k/tree/main/step_24000) | |
 | 38 | [jermo1120/pi05-b1k-task38-spraying-for-bugs-25k](https://huggingface.co/jermo1120/pi05-b1k-task38-spraying-for-bugs-25k) | |
 | 40 | [RichardCTian/b1k-2026-task40-ft1](https://huggingface.co/RichardCTian/b1k-2026-task40-ft1) | |
@@ -214,7 +212,7 @@ Two caveats as of 2026-11-09: the task-37 repo below returns 404 (it is private 
 | 56, 78 | [Rena-Tian/b1k-2026-3more-ft1](https://huggingface.co/Rena-Tian/b1k-2026-3more-ft1) | |
 | 57 | [Luke-Xing/task57b1k](https://huggingface.co/Luke-Xing/task57b1k) | |
 | 59 | [RichardCTian/b1k-2026-task59-organizing-art-supplies](https://huggingface.co/RichardCTian/b1k-2026-task59-organizing-art-supplies) | |
-| 60 | [shi2bis/joint_57_60_69_93](https://huggingface.co/shi2bis/joint_57_60_69_93) | |
+| 60 | [shi2bis/joint_57_60_69_93 / joint_57_60_69_93_step11000](https://huggingface.co/shi2bis/joint_57_60_69_93/tree/main/joint_57_60_69_93_step11000) | |
 | 62 | [RichardCTian/b1k-2026-task62-halve-an-egg](https://huggingface.co/RichardCTian/b1k-2026-task62-halve-an-egg) | |
 | 64 | [RichardCTian/b1k-2026-task64-ft1](https://huggingface.co/RichardCTian/b1k-2026-task64-ft1) | |
 | 65, 71, 74, 75 | [amyjia1212/b1k-2026-t65-71-74-75 / step_049999](https://huggingface.co/amyjia1212/b1k-2026-t65-71-74-75/tree/main/step_049999) | ✅ |
@@ -223,7 +221,7 @@ Two caveats as of 2026-11-09: the task-37 repo below returns 404 (it is private 
 | 76, 82, 92 | [fei777/b1k2026-pi05-ft-tasks-76-82-92 @73da80f](https://huggingface.co/fei777/b1k2026-pi05-ft-tasks-76-82-92/tree/73da80fe71101cd7d6a35ebd5ed861965dbfb39c) | |
 | 77 | [hlhl188/b1k-2026-cluster-77-89 / runs/cluster_installing_devices_lora_v1/step_20000](https://huggingface.co/hlhl188/b1k-2026-cluster-77-89/tree/main/runs/cluster_installing_devices_lora_v1/step_20000) | |
 | 79, 84, 88 | [amyjia1212/b1k-2026-t79-81-84-88 / step_049999](https://huggingface.co/amyjia1212/b1k-2026-t79-81-84-88/tree/main/step_049999) | ✅ |
-| 80, 87 | [shi2bis/joint_76_80_87](https://huggingface.co/shi2bis/joint_76_80_87) | |
+| 80, 87 | [shi2bis/joint_76_80_87 / joint_76_80_87_step9000](https://huggingface.co/shi2bis/joint_76_80_87/tree/main/joint_76_80_87_step9000) | |
 | 81 | [amyjia1212/b1k-2026-t81-ft10k / step_009999](https://huggingface.co/amyjia1212/b1k-2026-t81-ft10k/tree/main/step_009999) | ✅ |
 | 83 | [angegiga/pi05-store-honey / checkpoints/from9500_90500](https://huggingface.co/angegiga/pi05-store-honey/tree/main/checkpoints/from9500_90500) | |
 | 89 | [Rena-Tian/b1k-2026-task89-ft1](https://huggingface.co/Rena-Tian/b1k-2026-task89-ft1) | |
