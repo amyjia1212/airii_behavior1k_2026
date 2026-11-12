@@ -25,7 +25,7 @@ where it is published.
 | jermo1120 | 37 | PIB (`pi_behavior_b1k_task37_clean_a_trumpet`, single task, 25k steps, LR 5e-6 → 5e-7; `step_24000` submitted) | ckpt3 | [`jermo1120/task37/`](jermo1120/task37/) patches + launch script (from the [model card](https://huggingface.co/jermo1120/b1k-task37-clean-a-trumpet-25k)). **Complete** | 0.00 (the task's only goal gives no partial credit) |
 | angegiga | 83 | π0.5 (openpi, `wensi-ai/openpi` behavior branch + patches) | pi05_base | in the HF repo ([`openpi_patches/`, `rebuild.sh`, `SUBMISSION.md`](https://huggingface.co/angegiga/pi05-store-honey)) | 3/10 successes |
 | estjtmi (Thomas) | 5, 27, 31 | PIB, 50 slots (27, 31: 5-task model 4/27/31/32/35 from ckpt3, 10k steps) | ckpt3 (27, 31); ? (5) | **Partial**: fork [estjtmi/behavior-1k-solution](https://github.com/estjtmi/behavior-1k-solution) has his serving/eval changes (commit `6750a2b` on top of the winners' `ca556f7`) and the 27/31 eval runs (branch [`eval/ckpt3-10k-tasks-31-27-20261005`](https://github.com/estjtmi/behavior-1k-solution/tree/eval/ckpt3-10k-tasks-31-27-20261005)); the training configs for both models are not pushed | 27: 0.1875, 31: 0.15 (his eval on 301–310) |
-| Luke-Xing | 57 | PIB in 2025 slot 36 (shapes unchanged), 3 stages: LoRA 12k → LoRA 8k → + action expert 7.5k, batch 32, 1× RTX 5090 | ckpt3 | recipe, LRs and exact commands in the [model card](https://huggingface.co/Luke-Xing/task57b1k); **code missing**: the configs, `serve_b1k_2026.py` (slot mapping, torso cap) and data loader are not published | 0.10 (1/10; a repeat run scored 0/10) |
+| Luke-Xing | 57 | PIB in 2025 slot 36 (shapes unchanged), 3 stages: LoRA 12k → LoRA 8k → + action expert 7.5k, batch 32, 1× RTX 5090 | ckpt3 | recipe, LRs and exact commands in the [model card](https://huggingface.co/Luke-Xing/task57b1k); code in [`luke_task57/policy_code/`](luke_task57/policy_code/) (copied unchanged from the HF repo's `task 57/policy_code/`; configs `pi_behavior_sweep_lora` → `_lora_cont` → `_expert` in `src/b1k/training/config.py`, plus `serve_b1k_2026.py`). **Complete**. The HF repo has no `assets/`; per the card the run used checkpoint_3's own norm stats and FAST tokenizer, so copy `assets/` from `IliaLarchenko/behavior_submission/checkpoint_3` | 0.10 (1/10; a repeat run scored 0/10) |
 | hlhl188 | 77 | π0.5 + LoRA (`cluster_installing_devices_lora_v1`; trained jointly on 77 + 89, step 20000 submitted) | ckpt2 | [`helen_task77/`](helen_task77/) submodule ([hehe6-88/b1k-2026-task77](https://github.com/hehe6-88/b1k-2026-task77)). **Complete**: training config, code, model card, per-instance results | 0.2500 |
 
 Tasks 13, 41, 49, 58 and 68 had no trained model.
@@ -34,6 +34,8 @@ Tasks 13, 41, 49, 58 and 68 had no trained model.
 - `fei777/` is the `code.tgz` tree uploaded with fei777's checkpoints for tasks 4/23/48, 51/61 and 76/82/92.
   The checkpoints for 2/3/6/19/28/44/46/47 and 33/36/39 were trained with the same tree except for `src/b1k/training/config.py`,
   and those two config versions are in `fei777/config_variants/`.
+- `luke_task57/policy_code/` is the `src/` + `scripts/` snapshot Luke uploaded with his checkpoint (`commit.txt` = his
+  training-repo commit). Init paths in `config.py` are his pod's `/workspace/...` paths; point them at your own copies.
 - `jermo1120/` holds the patches uploaded with `jermo1120/pi05-b1k-task55-re-shelving-library-books` (task 55), and in
   `task37/` and `task38/` the files uploaded with the task-37 and task-38 checkpoints (copied unchanged).
 - `scarlett/` is a git submodule pinned to `shi3bis/1k-repo-scarlett@4b2436f` (`main`). The code for each submitted model is
@@ -45,13 +47,11 @@ Tasks 13, 41, 49, 58 and 68 had no trained model.
   every per-task config through the 10/16 deadline), exact diffs against upstream, the openpi π0.5 diff for task 69,
   train/eval/sweep scripts, their runbook `CLAUDE.md`, and a task → config map (`CONFIGS_AFTER_2026-10-04.md`).
 
-## Still needed (status as of 2026-11-10)
+## Still needed (status as of 2026-11-11)
 
 1. Thomas (estjtmi, tasks 5, 27, 31): his serving/eval code is on GitHub, but not the training setup. Needed for each of
    his two models (`behavior-2026-pi05-15tasks` → task 5, `behavior-2026-five-winner-ckpt3-10k` → 27, 31): the training
    config (or the `config.py` diff), the train command, and init, task list, steps, batch and LR; plus the task-5 score.
-2. Luke-Xing (57): the model card is done; still needed is the code it describes (`src/`, `scripts/` with the three
-   `pi_behavior_sweep_*` configs and `serve_b1k_2026.py`), e.g. the `policy_code/` folder from the submission zip.
 
 ## Scarlett's runs
 

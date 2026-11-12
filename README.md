@@ -210,7 +210,7 @@ The full routing of our team's submission is below; ✅ marks the tasks that use
 | 54 | [RichardCTian/b1k-2026-task54-putting-away-toys](https://huggingface.co/RichardCTian/b1k-2026-task54-putting-away-toys) | |
 | 55 | [jermo1120/pi05-b1k-task55-re-shelving-library-books](https://huggingface.co/jermo1120/pi05-b1k-task55-re-shelving-library-books) | |
 | 56, 78 | [Rena-Tian/b1k-2026-3more-ft1](https://huggingface.co/Rena-Tian/b1k-2026-3more-ft1) | |
-| 57 | [Luke-Xing/task57b1k](https://huggingface.co/Luke-Xing/task57b1k) | |
+| 57 | [Luke-Xing/task57b1k / task 57](https://huggingface.co/Luke-Xing/task57b1k/tree/main/task%2057) | |
 | 59 | [RichardCTian/b1k-2026-task59-organizing-art-supplies](https://huggingface.co/RichardCTian/b1k-2026-task59-organizing-art-supplies) | |
 | 60 | [shi2bis/joint_57_60_69_93 / joint_57_60_69_93_step11000](https://huggingface.co/shi2bis/joint_57_60_69_93/tree/main/joint_57_60_69_93_step11000) | |
 | 62 | [RichardCTian/b1k-2026-task62-halve-an-egg](https://huggingface.co/RichardCTian/b1k-2026-task62-halve-an-egg) | |
